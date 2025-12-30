@@ -498,8 +498,14 @@ OS controls map to `syscall.SysProcAttr` for process/session configuration. Use 
 
 CreationFlags sets Windows process creation flags (for example, create a new process group). It is a no-op on non-Windows platforms.
 
+Common flags:
+
+- `execx.CreateNewProcessGroup`
+- `execx.CreateNewConsole`
+- `execx.CreateNoWindow`
+
 ```go
-out, _ := execx.Command("printf", "ok").CreationFlags(0x00000200).Output()
+out, _ := execx.Command("printf", "ok").CreationFlags(execx.CreateNewProcessGroup).Output()
 fmt.Print(out)
 // ok
 ```

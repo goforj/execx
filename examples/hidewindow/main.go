@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	// HideWindow hides console windows and sets CREATE_NO_WINDOW for console apps.
+	// HideWindow is a no-op on non-Windows platforms; on Windows it hides console windows.
 
 	// Example: hide window
 	out, _ := execx.Command("printf", "ok").HideWindow(true).Output()

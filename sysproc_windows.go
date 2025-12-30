@@ -6,36 +6,18 @@ import "syscall"
 
 // Setpgid is a no-op on Windows; on Unix it places the child in a new process group.
 // @group OS Controls
-//
-// Example: setpgid
-//
-//	out, _ := execx.Command("printf", "ok").Setpgid(true).Output()
-//	fmt.Print(out)
-//	// ok
 func (c *Cmd) Setpgid(_ bool) *Cmd {
 	return c
 }
 
 // Setsid is a no-op on Windows; on Unix it starts a new session.
 // @group OS Controls
-//
-// Example: setsid
-//
-//	out, _ := execx.Command("printf", "ok").Setsid(true).Output()
-//	fmt.Print(out)
-//	// ok
 func (c *Cmd) Setsid(_ bool) *Cmd {
 	return c
 }
 
 // Pdeathsig is a no-op on Windows; on Linux it signals the child when the parent exits.
 // @group OS Controls
-//
-// Example: pdeathsig
-//
-//	out, _ := execx.Command("printf", "ok").Pdeathsig(syscall.SIGTERM).Output()
-//	fmt.Print(out)
-//	// ok
 func (c *Cmd) Pdeathsig(_ syscall.Signal) *Cmd {
 	return c
 }
@@ -43,9 +25,11 @@ func (c *Cmd) Pdeathsig(_ syscall.Signal) *Cmd {
 // CreationFlags sets Windows process creation flags (for example, create a new process group).
 // @group OS Controls
 //
+// Common flags: execx.CreateNewProcessGroup, execx.CreateNewConsole, execx.CreateNoWindow.
+//
 // Example: creation flags
 //
-//	out, _ := execx.Command("printf", "ok").CreationFlags(0x00000200).Output()
+//	out, _ := execx.Command("printf", "ok").CreationFlags(execx.CreateNewProcessGroup).Output()
 //	fmt.Print(out)
 //	// ok
 func (c *Cmd) CreationFlags(flags uint32) *Cmd {

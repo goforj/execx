@@ -6,12 +6,6 @@ import "syscall"
 
 // Setpgid places the child in a new process group for group signals.
 // @group OS Controls
-//
-// Example: setpgid
-//
-//	out, _ := execx.Command("printf", "ok").Setpgid(true).Output()
-//	fmt.Print(out)
-//	// ok
 func (c *Cmd) Setpgid(on bool) *Cmd {
 	c.ensureSysProcAttr()
 	c.sysProcAttr.Setpgid = on
@@ -20,12 +14,6 @@ func (c *Cmd) Setpgid(on bool) *Cmd {
 
 // Setsid starts the child in a new session, detaching it from the terminal.
 // @group OS Controls
-//
-// Example: setsid
-//
-//	out, _ := execx.Command("printf", "ok").Setsid(true).Output()
-//	fmt.Print(out)
-//	// ok
 func (c *Cmd) Setsid(on bool) *Cmd {
 	c.ensureSysProcAttr()
 	c.sysProcAttr.Setsid = on
@@ -34,12 +22,6 @@ func (c *Cmd) Setsid(on bool) *Cmd {
 
 // Pdeathsig is a no-op on non-Linux Unix platforms; on Linux it signals the child when the parent exits.
 // @group OS Controls
-//
-// Example: pdeathsig
-//
-//	out, _ := execx.Command("printf", "ok").Pdeathsig(syscall.SIGTERM).Output()
-//	fmt.Print(out)
-//	// ok
 func (c *Cmd) Pdeathsig(_ syscall.Signal) *Cmd {
 	return c
 }
