@@ -904,9 +904,6 @@ func (c *Cmd) shadowPrintStart(async bool) *shadowContext {
 
 func (c *Cmd) shadowCommand() string {
 	root := c.rootCmd()
-	if root == nil {
-		return ""
-	}
 	parts := []string{}
 	for stage := root; stage != nil; stage = stage.next {
 		parts = append(parts, stage.ShellEscaped())

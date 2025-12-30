@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	// Setsid is a no-op on Windows; on Unix it starts a new session.
+	// Setsid starts the child in a new session, detaching it from the terminal.
 
 	// Example: setsid
 	out, _ := execx.Command("printf", "ok").Setsid(true).Output()
