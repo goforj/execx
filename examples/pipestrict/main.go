@@ -12,10 +12,10 @@ func main() {
 	// PipeStrict sets strict pipeline semantics.
 
 	// Example: strict
-	res, err := execx.Command("false").
+	res, _ := execx.Command("false").
 		Pipe("printf", "ok").
 		PipeStrict().
 		Run()
-	fmt.Println(err == nil && res.ExitCode != 0)
+	fmt.Println(res.ExitCode != 0)
 	// #bool true
 }

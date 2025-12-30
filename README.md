@@ -315,8 +315,8 @@ WithContext binds the command to a context.
 ```go
 ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 defer cancel()
-res, err := execx.Command("go", "env", "GOOS").WithContext(ctx).Run()
-fmt.Println(err == nil && res.ExitCode == 0)
+res, _ := execx.Command("go", "env", "GOOS").WithContext(ctx).Run()
+fmt.Println(res.ExitCode == 0)
 // #bool true
 ```
 
@@ -325,8 +325,8 @@ fmt.Println(err == nil && res.ExitCode == 0)
 WithDeadline binds the command to a deadline.
 
 ```go
-res, err := execx.Command("go", "env", "GOOS").WithDeadline(time.Now().Add(2 * time.Second)).Run()
-fmt.Println(err == nil && res.ExitCode == 0)
+res, _ := execx.Command("go", "env", "GOOS").WithDeadline(time.Now().Add(2 * time.Second)).Run()
+fmt.Println(res.ExitCode == 0)
 // #bool true
 ```
 
@@ -335,8 +335,8 @@ fmt.Println(err == nil && res.ExitCode == 0)
 WithTimeout binds the command to a timeout.
 
 ```go
-res, err := execx.Command("go", "env", "GOOS").WithTimeout(2 * time.Second).Run()
-fmt.Println(err == nil && res.ExitCode == 0)
+res, _ := execx.Command("go", "env", "GOOS").WithTimeout(2 * time.Second).Run()
+fmt.Println(res.ExitCode == 0)
 // #bool true
 ```
 
@@ -493,8 +493,8 @@ fmt.Println(out != "")
 Run executes the command and returns the result and any error.
 
 ```go
-res, err := execx.Command("go", "env", "GOOS").Run()
-fmt.Println(err == nil && res.ExitCode == 0)
+res, _ := execx.Command("go", "env", "GOOS").Run()
+fmt.Println(res.ExitCode == 0)
 // #bool true
 ```
 
@@ -504,8 +504,8 @@ Start executes the command asynchronously.
 
 ```go
 proc := execx.Command("go", "env", "GOOS").Start()
-res, err := proc.Wait()
-fmt.Println(err == nil && res.ExitCode == 0)
+res, _ := proc.Wait()
+fmt.Println(res.ExitCode == 0)
 // #bool true
 ```
 
@@ -566,7 +566,7 @@ fmt.Println(out)
 
 ### <a id="creationflags"></a>CreationFlags
 
-CreationFlags sets Windows creation flags.
+CreationFlags is a no-op on non-Windows platforms.
 
 _Example: creation flags_
 
@@ -584,7 +584,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").CreationFlags(0) != nil)
 
 ### <a id="hidewindow"></a>HideWindow
 
-HideWindow controls window visibility and sets CREATE_NO_WINDOW for console apps.
+HideWindow is a no-op on non-Windows platforms.
 
 _Example: hide window_
 
@@ -602,7 +602,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)
 
 ### <a id="pdeathsig"></a>Pdeathsig
 
-Pdeathsig is a no-op on Windows.
+Pdeathsig is a no-op on non-Linux Unix platforms.
 
 _Example: pdeathsig_
 
@@ -627,7 +627,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").Pdeathsig(0) != nil)
 
 ### <a id="setpgid"></a>Setpgid
 
-Setpgid is a no-op on Windows.
+Setpgid sets the process group ID behavior.
 
 _Example: setpgid_
 
@@ -652,7 +652,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
 
 ### <a id="setsid"></a>Setsid
 
-Setsid is a no-op on Windows.
+Setsid sets the session ID behavior.
 
 _Example: setsid_
 
@@ -707,11 +707,11 @@ fmt.Println(err == nil && res.Stdout == "ok")
 PipeStrict sets strict pipeline semantics.
 
 ```go
-res, err := execx.Command("false").
+res, _ := execx.Command("false").
 	Pipe("printf", "ok").
 	PipeStrict().
 	Run()
-fmt.Println(err == nil && res.ExitCode != 0)
+fmt.Println(res.ExitCode != 0)
 // #bool true
 ```
 

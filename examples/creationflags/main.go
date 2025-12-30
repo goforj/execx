@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	// CreationFlags is a no-op on non-Windows platforms.
+	// CreationFlags sets Windows creation flags.
 
 	// Example: creation flags
 	fmt.Println(execx.Command("go", "env", "GOOS").CreationFlags(0) != nil)

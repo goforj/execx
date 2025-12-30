@@ -12,7 +12,7 @@ func main() {
 	// Run executes the command and returns the result and any error.
 
 	// Example: run
-	res, err := execx.Command("go", "env", "GOOS").Run()
-	fmt.Println(err == nil && res.ExitCode == 0)
+	res, _ := execx.Command("go", "env", "GOOS").Run()
+	fmt.Println(res.ExitCode == 0)
 	// #bool true
 }

@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	// Setsid sets the session ID behavior.
+	// Setsid is a no-op on Windows.
 
 	// Example: setsid
 	fmt.Println(execx.Command("go", "env", "GOOS").Setsid(true) != nil)

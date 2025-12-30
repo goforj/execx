@@ -214,8 +214,8 @@ func (c *Cmd) Dir(path string) *Cmd {
 //
 //	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 //	defer cancel()
-//	res, err := execx.Command("go", "env", "GOOS").WithContext(ctx).Run()
-//	fmt.Println(err == nil && res.ExitCode == 0)
+//	res, _ := execx.Command("go", "env", "GOOS").WithContext(ctx).Run()
+//	fmt.Println(res.ExitCode == 0)
 //	// #bool true
 func (c *Cmd) WithContext(ctx context.Context) *Cmd {
 	if c.cancel != nil {
@@ -231,8 +231,8 @@ func (c *Cmd) WithContext(ctx context.Context) *Cmd {
 //
 // Example: with timeout
 //
-//	res, err := execx.Command("go", "env", "GOOS").WithTimeout(2 * time.Second).Run()
-//	fmt.Println(err == nil && res.ExitCode == 0)
+//	res, _ := execx.Command("go", "env", "GOOS").WithTimeout(2 * time.Second).Run()
+//	fmt.Println(res.ExitCode == 0)
 //	// #bool true
 func (c *Cmd) WithTimeout(d time.Duration) *Cmd {
 	parent := c.ctx
@@ -253,8 +253,8 @@ func (c *Cmd) WithTimeout(d time.Duration) *Cmd {
 //
 // Example: with deadline
 //
-//	res, err := execx.Command("go", "env", "GOOS").WithDeadline(time.Now().Add(2 * time.Second)).Run()
-//	fmt.Println(err == nil && res.ExitCode == 0)
+//	res, _ := execx.Command("go", "env", "GOOS").WithDeadline(time.Now().Add(2 * time.Second)).Run()
+//	fmt.Println(res.ExitCode == 0)
 //	// #bool true
 func (c *Cmd) WithDeadline(t time.Time) *Cmd {
 	parent := c.ctx
@@ -437,11 +437,11 @@ func (c *Cmd) Pipe(name string, args ...string) *Cmd {
 //
 // Example: strict
 //
-//	res, err := execx.Command("false").
+//	res, _ := execx.Command("false").
 //		Pipe("printf", "ok").
 //		PipeStrict().
 //		Run()
-//	fmt.Println(err == nil && res.ExitCode != 0)
+//	fmt.Println(res.ExitCode != 0)
 //	// #bool true
 func (c *Cmd) PipeStrict() *Cmd {
 	c.rootCmd().pipeMode = pipeStrict
@@ -534,8 +534,8 @@ func (c *Cmd) ShellEscaped() string {
 //
 // Example: run
 //
-//	res, err := execx.Command("go", "env", "GOOS").Run()
-//	fmt.Println(err == nil && res.ExitCode == 0)
+//	res, _ := execx.Command("go", "env", "GOOS").Run()
+//	fmt.Println(res.ExitCode == 0)
 //	// #bool true
 func (c *Cmd) Run() (Result, error) {
 	pipe := c.newPipeline(false)
@@ -624,8 +624,8 @@ func (c *Cmd) PipelineResults() ([]Result, error) {
 // Example: start
 //
 //	proc := execx.Command("go", "env", "GOOS").Start()
-//	res, err := proc.Wait()
-//	fmt.Println(err == nil && res.ExitCode == 0)
+//	res, _ := proc.Wait()
+//	fmt.Println(res.ExitCode == 0)
 //	// #bool true
 func (c *Cmd) Start() *Process {
 	pipe := c.newPipeline(false)
