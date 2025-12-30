@@ -9,8 +9,7 @@ import "syscall"
 //
 // Example: setpgid
 //
-//	cmd := execx.Command("go", "env", "GOOS").Setpgid(true)
-//	fmt.Println(cmd != nil)
+//	fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
 //	// #bool true
 func (c *Cmd) Setpgid(on bool) *Cmd {
 	c.ensureSysProcAttr()
@@ -23,8 +22,7 @@ func (c *Cmd) Setpgid(on bool) *Cmd {
 //
 // Example: setsid
 //
-//	cmd := execx.Command("go", "env", "GOOS").Setsid(true)
-//	fmt.Println(cmd != nil)
+//	fmt.Println(execx.Command("go", "env", "GOOS").Setsid(true) != nil)
 //	// #bool true
 func (c *Cmd) Setsid(on bool) *Cmd {
 	c.ensureSysProcAttr()
@@ -37,8 +35,7 @@ func (c *Cmd) Setsid(on bool) *Cmd {
 //
 // Example: pdeathsig
 //
-//	cmd := execx.Command("go", "env", "GOOS").Pdeathsig(0)
-//	fmt.Println(cmd != nil)
+//	fmt.Println(execx.Command("go", "env", "GOOS").Pdeathsig(0) != nil)
 //	// #bool true
 func (c *Cmd) Pdeathsig(sig syscall.Signal) *Cmd {
 	c.ensureSysProcAttr()

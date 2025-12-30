@@ -12,15 +12,12 @@ func main() {
 	// Setpgid sets the process group ID behavior.
 
 	// Example: setpgid
-	cmd := execx.Command("go", "env", "GOOS").Setpgid(true)
-	fmt.Println(cmd != nil)
+	fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
 	// #bool true
 	// Example: setpgid
-	cmd := execx.Command("go", "env", "GOOS").Setpgid(true)
-	fmt.Println(cmd != nil)
+	fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
 	// #bool true
 	// Example: setpgid
-	cmd := execx.Command("go", "env", "GOOS").Setpgid(true)
-	fmt.Println(cmd != nil)
+	fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
 	// #bool true
 }

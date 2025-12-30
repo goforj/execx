@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/github/v/tag/goforj/execx?label=version&sort=semver" alt="Latest tag">
     <a href="https://codecov.io/gh/goforj/execx" ><img src="https://codecov.io/github/goforj/execx/graph/badge.svg?token=9KT46ZORP3"/></a>
 <!-- test-count:embed:start -->
-    <img src="https://img.shields.io/badge/tests-96-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-98-brightgreen" alt="Tests">
 <!-- test-count:embed:end -->
     <a href="https://goreportcard.com/report/github.com/goforj/execx"><img src="https://goreportcard.com/badge/github.com/goforj/execx" alt="Go Report Card"></a>
 </p>
@@ -273,7 +273,7 @@ This guarantees all examples are valid, up-to-date, and remain functional as the
 | **Errors** | [Error](#error) [Unwrap](#unwrap) |
 | **Execution** | [CombinedOutput](#combinedoutput) [Output](#output) [OutputBytes](#outputbytes) [OutputTrimmed](#outputtrimmed) [Run](#run) [Start](#start) |
 | **Input** | [StdinBytes](#stdinbytes) [StdinFile](#stdinfile) [StdinReader](#stdinreader) [StdinString](#stdinstring) |
-| **Other** | [CreationFlags](#creationflags) [HideWindow](#hidewindow) [Pdeathsig](#pdeathsig) [Setpgid](#setpgid) [Setsid](#setsid) |
+| **OS Controls** | [CreationFlags](#creationflags) [HideWindow](#hidewindow) [Pdeathsig](#pdeathsig) [Setpgid](#setpgid) [Setsid](#setsid) |
 | **Pipelining** | [Pipe](#pipe) [PipeBestEffort](#pipebesteffort) [PipeStrict](#pipestrict) [PipelineResults](#pipelineresults) |
 | **Process** | [GracefulShutdown](#gracefulshutdown) [Interrupt](#interrupt) [KillAfter](#killafter) [Send](#send) [Terminate](#terminate) [Wait](#wait) |
 | **Results** | [IsExitCode](#isexitcode) [IsSignal](#issignal) [OK](#ok) |
@@ -591,23 +591,66 @@ fmt.Println(out == "hi")
 // #bool true
 ```
 
-## Other
+## OS Controls
 
 ### <a id="creationflags"></a>CreationFlags
 
-CreationFlags sets Windows creation flags.
+CreationFlags is a no-op on non-Windows platforms.
+
+_Example: creation flags_
+
+```go
+fmt.Println(execx.Command("go", "env", "GOOS").CreationFlags(0) != nil)
+// #bool true
+```
+
+_Example: creation flags_
+
+```go
+fmt.Println(execx.Command("go", "env", "GOOS").CreationFlags(0) != nil)
+// #bool true
+```
 
 ### <a id="hidewindow"></a>HideWindow
 
-HideWindow controls window visibility.
+HideWindow is a no-op on non-Windows platforms.
+
+_Example: hide window_
+
+```go
+fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)
+// #bool true
+```
+
+_Example: hide window_
+
+```go
+fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)
+// #bool true
+```
 
 ### <a id="pdeathsig"></a>Pdeathsig
 
 Pdeathsig is a no-op on non-Linux Unix platforms.
 
+_Example: pdeathsig_
+
 ```go
-cmd := execx.Command("go", "env", "GOOS").Pdeathsig(0)
-fmt.Println(cmd != nil)
+fmt.Println(execx.Command("go", "env", "GOOS").Pdeathsig(0) != nil)
+// #bool true
+```
+
+_Example: pdeathsig_
+
+```go
+fmt.Println(execx.Command("go", "env", "GOOS").Pdeathsig(0) != nil)
+// #bool true
+```
+
+_Example: pdeathsig_
+
+```go
+fmt.Println(execx.Command("go", "env", "GOOS").Pdeathsig(0) != nil)
 // #bool true
 ```
 
@@ -615,9 +658,24 @@ fmt.Println(cmd != nil)
 
 Setpgid sets the process group ID behavior.
 
+_Example: setpgid_
+
 ```go
-cmd := execx.Command("go", "env", "GOOS").Setpgid(true)
-fmt.Println(cmd != nil)
+fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
+// #bool true
+```
+
+_Example: setpgid_
+
+```go
+fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
+// #bool true
+```
+
+_Example: setpgid_
+
+```go
+fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
 // #bool true
 ```
 
@@ -625,9 +683,24 @@ fmt.Println(cmd != nil)
 
 Setsid sets the session ID behavior.
 
+_Example: setsid_
+
 ```go
-cmd := execx.Command("go", "env", "GOOS").Setsid(true)
-fmt.Println(cmd != nil)
+fmt.Println(execx.Command("go", "env", "GOOS").Setsid(true) != nil)
+// #bool true
+```
+
+_Example: setsid_
+
+```go
+fmt.Println(execx.Command("go", "env", "GOOS").Setsid(true) != nil)
+// #bool true
+```
+
+_Example: setsid_
+
+```go
+fmt.Println(execx.Command("go", "env", "GOOS").Setsid(true) != nil)
 // #bool true
 ```
 

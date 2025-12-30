@@ -12,15 +12,12 @@ func main() {
 	// Setsid sets the session ID behavior.
 
 	// Example: setsid
-	cmd := execx.Command("go", "env", "GOOS").Setsid(true)
-	fmt.Println(cmd != nil)
+	fmt.Println(execx.Command("go", "env", "GOOS").Setsid(true) != nil)
 	// #bool true
 	// Example: setsid
-	cmd := execx.Command("go", "env", "GOOS").Setsid(true)
-	fmt.Println(cmd != nil)
+	fmt.Println(execx.Command("go", "env", "GOOS").Setsid(true) != nil)
 	// #bool true
 	// Example: setsid
-	cmd := execx.Command("go", "env", "GOOS").Setsid(true)
-	fmt.Println(cmd != nil)
+	fmt.Println(execx.Command("go", "env", "GOOS").Setsid(true) != nil)
 	// #bool true
 }
