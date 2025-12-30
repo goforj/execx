@@ -126,6 +126,30 @@ fmt.Println(res.ExitCode == 0)
 
 Signals, timeouts, and OS controls are documented in the API section below.
 
+## Kitchen Sink Chaining Example
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+defer cancel()
+
+res := execx.
+    Command("printf", "hello\nworld\n").
+    Pipe("tr", "a-z", "A-Z").
+    Env("MODE=demo").
+    WithContext(ctx).
+    OnStdout(func(line string) {
+        fmt.Println("OUT:", line)
+    }).
+    OnStderr(func(line string) {
+        fmt.Println("ERR:", line)
+    }).
+    Run()
+
+if !res.OK() {
+    log.Fatalf("command failed: %v", res.Err)
+}
+```
+
 ## Non-goals and design principles
 
 Design principles:
@@ -487,7 +511,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)
 
 ### <a id="pdeathsig"></a>Pdeathsig
 
-Pdeathsig is a no-op on non-Linux Unix platforms.
+Pdeathsig sets a parent-death signal on Linux.
 
 _Example: pdeathsig_
 
@@ -741,10 +765,10 @@ fmt.Println(err == nil)
 OnStdout registers a line callback for stdout.
 
 ```go
-_, _ = execx.Command("go", "env", "GOOS").
+_, _ = execx.Command("printf", "hi\n").
 	OnStdout(func(line string) { fmt.Println(line) }).
 	Run()
-// darwin
+// hi
 ```
 
 ### <a id="stderrwriter"></a>StderrWriter

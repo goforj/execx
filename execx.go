@@ -338,10 +338,10 @@ func (c *Cmd) StdinFile(file *os.File) *Cmd {
 //
 // Example: stdout lines
 //
-//	_, _ = execx.Command("go", "env", "GOOS").
+//	_, _ = execx.Command("printf", "hi\n").
 //		OnStdout(func(line string) { fmt.Println(line) }).
 //		Run()
-//	// darwin
+//	// hi
 func (c *Cmd) OnStdout(fn func(string)) *Cmd {
 	c.onStdout = fn
 	return c
@@ -361,7 +361,7 @@ func (c *Cmd) OnStdout(fn func(string)) *Cmd {
 //	// flag provided but not defined: -badflag
 //	// usage: go env [-json] [-changed] [-u] [-w] [var ...]
 //	// Run 'go help env' for details.
-//	// true
+//	// false
 func (c *Cmd) OnStderr(fn func(string)) *Cmd {
 	c.onStderr = fn
 	return c
