@@ -19,246 +19,129 @@
     <a href="https://goreportcard.com/report/github.com/goforj/execx"><img src="https://goreportcard.com/badge/github.com/goforj/execx" alt="Go Report Card"></a>
 </p>
 
-It provides a clean, composable API for running system commands without sacrificing control, correctness, or transparency.  
-No magic. No hidden behavior. Just a better way to work with processes.
+## What execx is
 
-## Why execx?
+execx is a small, explicit wrapper around `os/exec`. It keeps the `exec.Cmd` model but adds fluent construction and consistent result handling.
 
-The standard library’s `os/exec` package is powerful, but verbose and easy to misuse.  
-`execx` keeps the same underlying model while making the common cases obvious and safe.
-
-**execx is for you if you want:**
-
-- Clear, chainable command construction
-- Predictable execution semantics
-- Explicit control over arguments, environment, and I/O
-- Zero shell interpolation or magic
-- A small, auditable API surface
+There is no shell interpolation. Arguments, environment, and I/O are set directly, and nothing runs until you call `Run`, `Output`, or `Start`.
 
 ## Installation
 
 ```bash
 go get github.com/goforj/execx
-````
+```
 
 ## Quick Start
 
 ```go
-out, err := execx.
-    Command("git", "status").
-    Output()
-
+out, _ := execx.Command("echo", "hello").OutputTrimmed()
 fmt.Println(out)
+// #string hello
 ```
 
-Or with structured execution:
+On Windows, use `cmd /c echo hello` or `powershell -Command "echo hello"` for shell built-ins.
+
+## Basic usage
+
+Build a command and run it:
 
 ```go
-res, err := execx.Command("ls", "-la").Run()
-if err != nil {
-    log.Fatal(err)
-}
-
-fmt.Println(res.Stdout)
+cmd := execx.Command("echo").Arg("hello")
+res, _ := cmd.Run()
+fmt.Print(res.Stdout)
+// hello
 ```
-
-## Fluent Command Construction
-
-Commands are built fluently and executed explicitly.
-
-```go
-cmd := execx.
-    Command("docker", "run").
-    Arg("--rm").
-    Arg("-p", "8080:80").
-    Arg("nginx")
-```
-
-Nothing is executed until you call `Run`, `Output`, or `Start`.
-
-## Argument Handling
 
 Arguments are appended deterministically and never shell-expanded.
 
-```go
-cmd.Arg("--env", "PROD")
-cmd.Arg(map[string]string{"--name": "api"})
-```
+## Output handling
 
-This guarantees predictable behavior across platforms.
-
-## Execution Modes
-
-### Run
-
-Execute and return a structured result:
+Use `Output` variants when you only need stdout:
 
 ```go
-_, _ = cmd.Run()
+out, _ := execx.Command("echo", "hello").OutputTrimmed()
+fmt.Println(out)
+// #string hello
 ```
 
-### Output Variants
-
-```go
-out, err := cmd.Output()
-out, err := cmd.OutputBytes()
-out, err := cmd.OutputTrimmed()
-out, err := cmd.CombinedOutput()
-```
-
-### Output
-
-Return stdout directly:
-
-```go
-out, err := cmd.Output()
-```
-
-### Start (async)
-
-```go
-proc := cmd.Start()
-_, _ = proc.Wait()
-proc.KillAfter(5 * time.Second)
-```
-
-## Result Object
-
-Every execution returns a `Result`:
-
-```go
-type Result struct {
-    Stdout   string
-    Stderr   string
-    ExitCode int
-    Err      error
-    Duration time.Duration
-}
-```
-
-* Non-zero exit codes do **not** imply failure
-* `Err` mirrors the returned error (spawn, context, signal)
+`Output`, `OutputBytes`, `OutputTrimmed`, and `CombinedOutput` differ only in how they return data.
 
 ## Pipelining
 
-Chain commands safely (pipeline execution is cross-platform; the commands you choose must exist on that OS):
+Pipelines run on all platforms; command availability is OS-specific.
 
 ```go
-out, err := execx.
-    Command("ps", "aux").
-    Pipe("grep", "nginx").
-    Pipe("awk", "{print $2}").
-    Output()
+out, _ := execx.Command("printf", "go").
+	Pipe("tr", "a-z", "A-Z").
+	OutputTrimmed()
+fmt.Println(out)
+// #string GO
 ```
 
-Pipelines are explicit and deterministic. `PipeStrict` stops at the first failing stage and returns its error. `PipeBestEffort` still runs all stages, returns the last stage output, and surfaces the first error if any stage failed.
+On Windows, use `cmd /c` or `powershell -Command` for shell built-ins.
 
-On Windows, use `cmd /c` or `powershell -Command` to access shell built-ins when needed.
+`PipeStrict` (default) stops at the first failing stage and returns that error.  
+`PipeBestEffort` runs all stages, returns the last stage output, and surfaces the first error if any stage failed.
 
-```go
-cmd := execx.Command("ps", "aux").Pipe("grep", "nginx")
-cmd.PipeStrict()     // default
-cmd.PipeBestEffort() // returns last stage, surfaces first error
-```
-
-## Context & Timeouts
+## Context & cancellation
 
 ```go
-ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 defer cancel()
-
-execx.Command("sleep", "5").
-    WithContext(ctx).
-    Run()
-
-execx.Command("sleep", "5").
-    WithTimeout(2 * time.Second).
-    Run()
-
-execx.Command("sleep", "5").
-    WithDeadline(time.Now().Add(2 * time.Second)).
-    Run()
+res, _ := execx.Command("go", "env", "GOOS").WithContext(ctx).Run()
+fmt.Println(res.ExitCode == 0)
+// #bool true
 ```
 
-## Environment Control
+## Environment & I/O control
+
+Environment is explicit and deterministic:
 
 ```go
-cmd.Env("DEBUG=true")
-cmd.Env(map[string]string{"MODE": "prod"})
-cmd.EnvOnly(map[string]string{"MODE": "prod"})
-cmd.EnvInherit()
-cmd.EnvAppend(map[string]string{"DEBUG": "1"})
+cmd := execx.Command("echo", "hello").Env("MODE=prod")
+fmt.Println(strings.Contains(strings.Join(cmd.EnvList(), ","), "MODE=prod"))
+// #bool true
 ```
 
-## Streaming Output
+Standard input is opt-in:
 
 ```go
-cmd.
-    OnStdout(func(line string) {
-        fmt.Println("OUT:", line)
-    }).
-    OnStderr(func(line string) {
-        fmt.Println("ERR:", line)
-    }).
-    Run()
+out, _ := execx.Command("cat").
+	StdinString("hi").
+	OutputTrimmed()
+fmt.Println(out)
+// #string hi
 ```
 
-## Raw Writers
+## Advanced features
+
+For process control, use `Start` with the `Process` helpers:
 
 ```go
-cmd.StdoutWriter(os.Stdout)
-cmd.StderrWriter(os.Stderr)
+proc := execx.Command("go", "env", "GOOS").Start()
+res, _ := proc.Wait()
+fmt.Println(res.ExitCode == 0)
+// #bool true
 ```
 
-## Exit Handling
+Signals, timeouts, and OS controls are documented in the API section below.
 
-```go
-if res.IsExitCode(1) {
-    log.Println("Command failed")
-}
-```
+## Non-goals and design principles
 
-## Debugging Helpers
+Design principles:
 
-```go
-cmd.Args()
-cmd.EnvList()
-cmd.ShellEscaped()
-```
+* Explicit over implicit
+* No shell interpolation
+* Composable, deterministic behavior
 
-## Design Principles
-
-* **Explicit over implicit**
-* **No hidden behavior**
-* **No shell magic**
-* **Composable over clever**
-* **Predictable over flexible**
-
-`execx` is intentionally boring — in the best possible way.
-
-## Non-Goals
+Non-goals:
 
 * Shell scripting replacement
 * Command parsing or glob expansion
 * Task runners or build systems
 * Automatic retries or heuristics
 
-## Testing & Reliability
-
-* 100% public API coverage
-* Deterministic behavior
-* No global state
-* Safe for concurrent read-only use; mutation during execution is undefined
-
-## Runnable examples
-
-Every function has a corresponding runnable example under [`./examples`](./examples).
-
-These examples are **generated directly from the documentation blocks** of each function, ensuring the docs and code never drift. These are the same examples you see here in the README and GoDoc.
-
-An automated test executes **every example** to verify it builds and runs successfully.
-
-This guarantees all examples are valid, up-to-date, and remain functional as the API evolves.
+All public APIs are covered by runnable examples under `./examples`, and the test suite executes them to keep docs and behavior in sync.
 
 <!-- api:embed:start -->
 
@@ -604,7 +487,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)
 
 ### <a id="pdeathsig"></a>Pdeathsig
 
-Pdeathsig sets a parent-death signal on Linux.
+Pdeathsig is a no-op on non-Linux Unix platforms.
 
 _Example: pdeathsig_
 
@@ -850,7 +733,7 @@ fmt.Println(err == nil)
 // flag provided but not defined: -badflag
 // usage: go env [-json] [-changed] [-u] [-w] [var ...]
 // Run 'go help env' for details.
-// true
+// false
 ```
 
 ### <a id="onstdout"></a>OnStdout
