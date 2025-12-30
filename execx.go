@@ -451,12 +451,12 @@ func (c *Cmd) PipeStrict() *Cmd {
 //
 // Example: best effort
 //
-//	res, err := execx.Command("false").
+//	res, _ := execx.Command("false").
 //		Pipe("printf", "ok").
 //		PipeBestEffort().
 //		Run()
-//	fmt.Println(err == nil && res.Stdout == "ok")
-//	// #bool true
+//	fmt.Print(res.Stdout)
+//	// ok
 func (c *Cmd) PipeBestEffort() *Cmd {
 	c.rootCmd().pipeMode = pipeBestEffort
 	return c
@@ -607,11 +607,14 @@ func (c *Cmd) CombinedOutput() (string, error) {
 //
 // Example: pipeline results
 //
-//	results, err := execx.Command("printf", "go").
+//	results, _ := execx.Command("printf", "go").
 //		Pipe("tr", "a-z", "A-Z").
 //		PipelineResults()
-//	fmt.Println(err == nil && len(results) == 2)
-//	// #bool true
+//	fmt.Printf("%+v", results)
+//	// [
+//	//	{Stdout:go Stderr: ExitCode:0 Err:<nil> Duration:6.367208ms signal:<nil>}
+//	//	{Stdout:GO Stderr: ExitCode:0 Err:<nil> Duration:4.976291ms signal:<nil>}
+//	// ]
 func (c *Cmd) PipelineResults() ([]Result, error) {
 	pipe := c.newPipeline(false)
 	pipe.start()

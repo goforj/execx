@@ -530,7 +530,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)
 
 ### <a id="pdeathsig"></a>Pdeathsig
 
-Pdeathsig is a no-op on Windows.
+Pdeathsig sets a parent-death signal on Linux.
 
 _Example: pdeathsig_
 
@@ -555,7 +555,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").Pdeathsig(0) != nil)
 
 ### <a id="setpgid"></a>Setpgid
 
-Setpgid is a no-op on Windows.
+Setpgid sets the process group ID behavior.
 
 _Example: setpgid_
 
@@ -580,7 +580,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
 
 ### <a id="setsid"></a>Setsid
 
-Setsid is a no-op on Windows.
+Setsid sets the session ID behavior.
 
 _Example: setsid_
 
@@ -622,12 +622,12 @@ fmt.Println(out)
 PipeBestEffort sets best-effort pipeline semantics (run all stages, surface the first error).
 
 ```go
-res, err := execx.Command("false").
+res, _ := execx.Command("false").
 	Pipe("printf", "ok").
 	PipeBestEffort().
 	Run()
-fmt.Println(err == nil && res.Stdout == "ok")
-// #bool true
+fmt.Print(res.Stdout)
+// ok
 ```
 
 ### <a id="pipestrict"></a>PipeStrict
@@ -648,11 +648,14 @@ fmt.Println(res.ExitCode != 0)
 PipelineResults executes the command and returns per-stage results and any error.
 
 ```go
-results, err := execx.Command("printf", "go").
+results, _ := execx.Command("printf", "go").
 	Pipe("tr", "a-z", "A-Z").
 	PipelineResults()
-fmt.Println(err == nil && len(results) == 2)
-// #bool true
+fmt.Printf("%+v", results)
+// [
+//	{Stdout:go Stderr: ExitCode:0 Err:<nil> Duration:6.367208ms signal:<nil>}
+//	{Stdout:GO Stderr: ExitCode:0 Err:<nil> Duration:4.976291ms signal:<nil>}
+// ]
 ```
 
 ## Process

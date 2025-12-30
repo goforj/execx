@@ -12,9 +12,12 @@ func main() {
 	// PipelineResults executes the command and returns per-stage results and any error.
 
 	// Example: pipeline results
-	results, err := execx.Command("printf", "go").
+	results, _ := execx.Command("printf", "go").
 		Pipe("tr", "a-z", "A-Z").
 		PipelineResults()
-	fmt.Println(err == nil && len(results) == 2)
-	// #bool true
+	fmt.Printf("%+v", results)
+	// [
+	//	{Stdout:go Stderr: ExitCode:0 Err:<nil> Duration:6.367208ms signal:<nil>}
+	//	{Stdout:GO Stderr: ExitCode:0 Err:<nil> Duration:4.976291ms signal:<nil>}
+	// ]
 }
