@@ -264,7 +264,7 @@ This guarantees all examples are valid, up-to-date, and remain functional as the
 ## API Index
 
 | Group | Functions |
-|------:|-----------|
+|------:|:-----------|
 | **Arguments** | [Arg](#arg) |
 | **Construction** | [Command](#command) |
 | **Context** | [WithContext](#withcontext) [WithDeadline](#withdeadline) [WithTimeout](#withtimeout) |
@@ -631,7 +631,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)
 
 ### <a id="pdeathsig"></a>Pdeathsig
 
-Pdeathsig is a no-op on Windows.
+Pdeathsig sets a parent-death signal on Linux.
 
 _Example: pdeathsig_
 
@@ -656,7 +656,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").Pdeathsig(0) != nil)
 
 ### <a id="setpgid"></a>Setpgid
 
-Setpgid is a no-op on Windows.
+Setpgid sets the process group ID behavior.
 
 _Example: setpgid_
 
@@ -681,7 +681,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
 
 ### <a id="setsid"></a>Setsid
 
-Setsid is a no-op on Windows.
+Setsid sets the session ID behavior.
 
 _Example: setsid_
 
