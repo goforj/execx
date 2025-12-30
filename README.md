@@ -631,7 +631,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)
 
 ### <a id="pdeathsig"></a>Pdeathsig
 
-Pdeathsig sets a parent-death signal on Linux.
+Pdeathsig is a no-op on non-Linux Unix platforms.
 
 _Example: pdeathsig_
 
@@ -712,25 +712,23 @@ Pipe appends a new command to the pipeline.
 
 ```go
 if os.Getenv("EXECX_EXAMPLE_CHILD") == "1" {
-	mode := os.Getenv("EXECX_EXAMPLE_MODE")
-	if mode == "emit" {
-		fmt.Print("ok")
-		return
-	}
-	if mode == "echo" {
+	switch os.Getenv("EXECX_EXAMPLE_MODE") {
+	case "emit":
+		fmt.Print("go")
+	case "upper":
 		buf := make([]byte, 8)
 		n, _ := os.Stdin.Read(buf)
-		_, _ = os.Stdout.Write(buf[:n])
-		return
+		fmt.Print(strings.ToUpper(string(buf[:n])))
 	}
+	return
 }
 out, _ := execx.Command(os.Args[0]).
 	Env("EXECX_EXAMPLE_CHILD=1", "EXECX_EXAMPLE_MODE=emit").
 	Pipe(os.Args[0]).
-	Env("EXECX_EXAMPLE_CHILD=1", "EXECX_EXAMPLE_MODE=echo").
-	Output()
-fmt.Println(out == "ok")
-// #bool true
+	Env("EXECX_EXAMPLE_CHILD=1", "EXECX_EXAMPLE_MODE=upper").
+	OutputTrimmed()
+fmt.Println(out)
+// #string GO
 ```
 
 ### <a id="pipebesteffort"></a>PipeBestEffort
@@ -738,9 +736,24 @@ fmt.Println(out == "ok")
 PipeBestEffort sets best-effort pipeline semantics.
 
 ```go
-cmd := execx.Command("go", "env", "GOOS").PipeBestEffort()
-fmt.Println(cmd != nil)
-// #bool true
+if os.Getenv("EXECX_EXAMPLE_CHILD") == "1" {
+	switch os.Getenv("EXECX_EXAMPLE_MODE") {
+	case "sleep":
+		time.Sleep(200 * time.Millisecond)
+	case "ok":
+		fmt.Print("ok")
+	}
+	return
+}
+res := execx.Command(os.Args[0]).
+	Env("EXECX_EXAMPLE_CHILD=1", "EXECX_EXAMPLE_MODE=sleep").
+	WithTimeout(50 * time.Millisecond).
+	Pipe(os.Args[0]).
+	Env("EXECX_EXAMPLE_CHILD=1", "EXECX_EXAMPLE_MODE=ok").
+	PipeBestEffort().
+	Run()
+fmt.Println(res.Stdout)
+// #string ok
 ```
 
 ### <a id="pipestrict"></a>PipeStrict
@@ -748,9 +761,23 @@ fmt.Println(cmd != nil)
 PipeStrict sets strict pipeline semantics.
 
 ```go
-cmd := execx.Command("go", "env", "GOOS").PipeStrict()
-fmt.Println(cmd != nil)
-// #bool true
+if os.Getenv("EXECX_EXAMPLE_CHILD") == "1" {
+	switch os.Getenv("EXECX_EXAMPLE_MODE") {
+	case "fail":
+		os.Exit(2)
+	case "ok":
+		fmt.Print("ok")
+	}
+	return
+}
+res := execx.Command(os.Args[0]).
+	Env("EXECX_EXAMPLE_CHILD=1", "EXECX_EXAMPLE_MODE=fail").
+	Pipe(os.Args[0]).
+	Env("EXECX_EXAMPLE_CHILD=1", "EXECX_EXAMPLE_MODE=ok").
+	PipeStrict().
+	Run()
+fmt.Println(res.ExitCode)
+// #int 2
 ```
 
 ### <a id="pipelineresults"></a>PipelineResults
@@ -758,9 +785,24 @@ fmt.Println(cmd != nil)
 PipelineResults executes the command and returns per-stage results.
 
 ```go
-results := execx.Command("go", "env", "GOOS").PipelineResults()
-fmt.Println(len(results) == 1)
-// #bool true
+if os.Getenv("EXECX_EXAMPLE_CHILD") == "1" {
+	switch os.Getenv("EXECX_EXAMPLE_MODE") {
+	case "emit":
+		fmt.Print("go")
+	case "upper":
+		buf := make([]byte, 8)
+		n, _ := os.Stdin.Read(buf)
+		fmt.Print(strings.ToUpper(string(buf[:n])))
+	}
+	return
+}
+results := execx.Command(os.Args[0]).
+	Env("EXECX_EXAMPLE_CHILD=1", "EXECX_EXAMPLE_MODE=emit").
+	Pipe(os.Args[0]).
+	Env("EXECX_EXAMPLE_CHILD=1", "EXECX_EXAMPLE_MODE=upper").
+	PipelineResults()
+fmt.Println(len(results))
+// #int 2
 ```
 
 ## Process

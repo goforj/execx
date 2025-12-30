@@ -447,25 +447,23 @@ func (c *Cmd) StderrWriter(w io.Writer) *Cmd {
 // Example: pipe
 //
 //	if os.Getenv("EXECX_EXAMPLE_CHILD") == "1" {
-//		mode := os.Getenv("EXECX_EXAMPLE_MODE")
-//		if mode == "emit" {
-//			fmt.Print("ok")
-//			return
-//		}
-//		if mode == "echo" {
+//		switch os.Getenv("EXECX_EXAMPLE_MODE") {
+//		case "emit":
+//			fmt.Print("go")
+//		case "upper":
 //			buf := make([]byte, 8)
 //			n, _ := os.Stdin.Read(buf)
-//			_, _ = os.Stdout.Write(buf[:n])
-//			return
+//			fmt.Print(strings.ToUpper(string(buf[:n])))
 //		}
+//		return
 //	}
 //	out, _ := execx.Command(os.Args[0]).
 //		Env("EXECX_EXAMPLE_CHILD=1", "EXECX_EXAMPLE_MODE=emit").
 //		Pipe(os.Args[0]).
-//		Env("EXECX_EXAMPLE_CHILD=1", "EXECX_EXAMPLE_MODE=echo").
-//		Output()
-//	fmt.Println(out == "ok")
-//	// #bool true
+//		Env("EXECX_EXAMPLE_CHILD=1", "EXECX_EXAMPLE_MODE=upper").
+//		OutputTrimmed()
+//	fmt.Println(out)
+//	// #string GO
 func (c *Cmd) Pipe(name string, args ...string) *Cmd {
 	root := c.rootCmd()
 	next := &Cmd{
@@ -488,9 +486,23 @@ func (c *Cmd) Pipe(name string, args ...string) *Cmd {
 //
 // Example: strict
 //
-//	cmd := execx.Command("go", "env", "GOOS").PipeStrict()
-//	fmt.Println(cmd != nil)
-//	// #bool true
+//	if os.Getenv("EXECX_EXAMPLE_CHILD") == "1" {
+//		switch os.Getenv("EXECX_EXAMPLE_MODE") {
+//		case "fail":
+//			os.Exit(2)
+//		case "ok":
+//			fmt.Print("ok")
+//		}
+//		return
+//	}
+//	res := execx.Command(os.Args[0]).
+//		Env("EXECX_EXAMPLE_CHILD=1", "EXECX_EXAMPLE_MODE=fail").
+//		Pipe(os.Args[0]).
+//		Env("EXECX_EXAMPLE_CHILD=1", "EXECX_EXAMPLE_MODE=ok").
+//		PipeStrict().
+//		Run()
+//	fmt.Println(res.ExitCode)
+//	// #int 2
 func (c *Cmd) PipeStrict() *Cmd {
 	c.rootCmd().pipeMode = pipeStrict
 	return c
@@ -501,9 +513,24 @@ func (c *Cmd) PipeStrict() *Cmd {
 //
 // Example: best effort
 //
-//	cmd := execx.Command("go", "env", "GOOS").PipeBestEffort()
-//	fmt.Println(cmd != nil)
-//	// #bool true
+//	if os.Getenv("EXECX_EXAMPLE_CHILD") == "1" {
+//		switch os.Getenv("EXECX_EXAMPLE_MODE") {
+//		case "sleep":
+//			time.Sleep(200 * time.Millisecond)
+//		case "ok":
+//			fmt.Print("ok")
+//		}
+//		return
+//	}
+//	res := execx.Command(os.Args[0]).
+//		Env("EXECX_EXAMPLE_CHILD=1", "EXECX_EXAMPLE_MODE=sleep").
+//		WithTimeout(50 * time.Millisecond).
+//		Pipe(os.Args[0]).
+//		Env("EXECX_EXAMPLE_CHILD=1", "EXECX_EXAMPLE_MODE=ok").
+//		PipeBestEffort().
+//		Run()
+//	fmt.Println(res.Stdout)
+//	// #string ok
 func (c *Cmd) PipeBestEffort() *Cmd {
 	c.rootCmd().pipeMode = pipeBestEffort
 	return c
@@ -650,9 +677,24 @@ func (c *Cmd) CombinedOutput() (string, error) {
 //
 // Example: pipeline results
 //
-//	results := execx.Command("go", "env", "GOOS").PipelineResults()
-//	fmt.Println(len(results) == 1)
-//	// #bool true
+//	if os.Getenv("EXECX_EXAMPLE_CHILD") == "1" {
+//		switch os.Getenv("EXECX_EXAMPLE_MODE") {
+//		case "emit":
+//			fmt.Print("go")
+//		case "upper":
+//			buf := make([]byte, 8)
+//			n, _ := os.Stdin.Read(buf)
+//			fmt.Print(strings.ToUpper(string(buf[:n])))
+//		}
+//		return
+//	}
+//	results := execx.Command(os.Args[0]).
+//		Env("EXECX_EXAMPLE_CHILD=1", "EXECX_EXAMPLE_MODE=emit").
+//		Pipe(os.Args[0]).
+//		Env("EXECX_EXAMPLE_CHILD=1", "EXECX_EXAMPLE_MODE=upper").
+//		PipelineResults()
+//	fmt.Println(len(results))
+//	// #int 2
 func (c *Cmd) PipelineResults() []Result {
 	pipe := c.newPipeline(false)
 	pipe.start()
