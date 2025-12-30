@@ -196,13 +196,8 @@ func (c *Cmd) EnvAppend(values map[string]string) *Cmd {
 //
 // Example: change dir
 //
-//	if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "pwd" {
-//		wd, _ := os.Getwd()
-//		fmt.Println(wd)
-//		return
-//	}
 //	dir := os.TempDir()
-//	out, _ := execx.Command(os.Args[0], "execx-example", "pwd").
+//	out, _ := execx.Command("pwd").
 //		Dir(dir).
 //		OutputTrimmed()
 //	fmt.Println(out == dir)
@@ -359,12 +354,8 @@ func (c *Cmd) OnStdout(fn func(string)) *Cmd {
 //
 // Example: stderr lines
 //
-//	if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "stderr" {
-//		_, _ = os.Stderr.WriteString("err\n")
-//		return
-//	}
 //	var lines []string
-//	execx.Command(os.Args[0], "execx-example", "stderr").
+//	execx.Command("go", "env", "-badflag").
 //		OnStderr(func(line string) { lines = append(lines, line) }).
 //		Run()
 //	fmt.Println(len(lines) == 1)
@@ -395,12 +386,8 @@ func (c *Cmd) StdoutWriter(w io.Writer) *Cmd {
 //
 // Example: stderr writer
 //
-//	if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "stderr" {
-//		_, _ = os.Stderr.WriteString("err\n")
-//		return
-//	}
 //	var out strings.Builder
-//	execx.Command(os.Args[0], "execx-example", "stderr").
+//	execx.Command("go", "env", "-badflag").
 //		StderrWriter(&out).
 //		Run()
 //	fmt.Println(out.Len() > 0)
@@ -415,19 +402,8 @@ func (c *Cmd) StderrWriter(w io.Writer) *Cmd {
 //
 // Example: pipe
 //
-//	if len(os.Args) > 2 && os.Args[1] == "execx-example" {
-//		switch os.Args[2] {
-//		case "emit":
-//			fmt.Print("go")
-//		case "upper":
-//			buf := make([]byte, 8)
-//			n, _ := os.Stdin.Read(buf)
-//			fmt.Print(strings.ToUpper(string(buf[:n])))
-//		}
-//		return
-//	}
-//	out, _ := execx.Command(os.Args[0], "execx-example", "emit").
-//		Pipe(os.Args[0], "execx-example", "upper").
+//	out, _ := execx.Command("printf", "go").
+//		Pipe("tr", "a-z", "A-Z").
 //		OutputTrimmed()
 //	fmt.Println(out)
 //	// #string GO
@@ -453,21 +429,12 @@ func (c *Cmd) Pipe(name string, args ...string) *Cmd {
 //
 // Example: strict
 //
-//	if len(os.Args) > 2 && os.Args[1] == "execx-example" {
-//		switch os.Args[2] {
-//		case "fail":
-//			os.Exit(2)
-//		case "ok":
-//			fmt.Print("ok")
-//		}
-//		return
-//	}
-//	res := execx.Command(os.Args[0], "execx-example", "fail").
-//		Pipe(os.Args[0], "execx-example", "ok").
+//	res := execx.Command("false").
+//		Pipe("printf", "ok").
 //		PipeStrict().
 //		Run()
-//	fmt.Println(res.ExitCode)
-//	// #int 2
+//	fmt.Println(res.ExitCode != 0)
+//	// #bool true
 func (c *Cmd) PipeStrict() *Cmd {
 	c.rootCmd().pipeMode = pipeStrict
 	return c
@@ -478,18 +445,8 @@ func (c *Cmd) PipeStrict() *Cmd {
 //
 // Example: best effort
 //
-//	if len(os.Args) > 2 && os.Args[1] == "execx-example" {
-//		switch os.Args[2] {
-//		case "sleep":
-//			time.Sleep(200 * time.Millisecond)
-//		case "ok":
-//			fmt.Print("ok")
-//		}
-//		return
-//	}
-//	res := execx.Command(os.Args[0], "execx-example", "sleep").
-//		WithTimeout(50 * time.Millisecond).
-//		Pipe(os.Args[0], "execx-example", "ok").
+//	res := execx.Command("false").
+//		Pipe("printf", "ok").
 //		PipeBestEffort().
 //		Run()
 //	fmt.Println(res.Stdout)
@@ -640,19 +597,8 @@ func (c *Cmd) CombinedOutput() (string, error) {
 //
 // Example: pipeline results
 //
-//	if len(os.Args) > 2 && os.Args[1] == "execx-example" {
-//		switch os.Args[2] {
-//		case "emit":
-//			fmt.Print("go")
-//		case "upper":
-//			buf := make([]byte, 8)
-//			n, _ := os.Stdin.Read(buf)
-//			fmt.Print(strings.ToUpper(string(buf[:n])))
-//		}
-//		return
-//	}
-//	results := execx.Command(os.Args[0], "execx-example", "emit").
-//		Pipe(os.Args[0], "execx-example", "upper").
+//	results := execx.Command("printf", "go").
+//		Pipe("tr", "a-z", "A-Z").
 //		PipelineResults()
 //	fmt.Println(len(results))
 //	// #int 2
@@ -838,11 +784,7 @@ func (p *Process) Wait() Result {
 //
 // Example: kill after
 //
-//	if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "sleep" {
-//		time.Sleep(2 * time.Second)
-//		return
-//	}
-//	proc := execx.Command(os.Args[0], "execx-example", "sleep").
+//	proc := execx.Command("sleep", "2").
 //		Start()
 //	proc.KillAfter(100 * time.Millisecond)
 //	res := proc.Wait()
@@ -864,11 +806,7 @@ func (p *Process) KillAfter(d time.Duration) {
 //
 // Example: send signal
 //
-//	if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "sleep" {
-//		time.Sleep(2 * time.Second)
-//		return
-//	}
-//	proc := execx.Command(os.Args[0], "execx-example", "sleep").
+//	proc := execx.Command("sleep", "2").
 //		Start()
 //	_ = proc.Send(os.Interrupt)
 //	res := proc.Wait()
@@ -885,11 +823,7 @@ func (p *Process) Send(sig os.Signal) error {
 //
 // Example: interrupt
 //
-//	if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "sleep" {
-//		time.Sleep(2 * time.Second)
-//		return
-//	}
-//	proc := execx.Command(os.Args[0], "execx-example", "sleep").
+//	proc := execx.Command("sleep", "2").
 //		Start()
 //	_ = proc.Interrupt()
 //	res := proc.Wait()
@@ -904,11 +838,7 @@ func (p *Process) Interrupt() error {
 //
 // Example: terminate
 //
-//	if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "sleep" {
-//		time.Sleep(2 * time.Second)
-//		return
-//	}
-//	proc := execx.Command(os.Args[0], "execx-example", "sleep").
+//	proc := execx.Command("sleep", "2").
 //		Start()
 //	_ = proc.Terminate()
 //	res := proc.Wait()
@@ -925,11 +855,7 @@ func (p *Process) Terminate() error {
 //
 // Example: graceful shutdown
 //
-//	if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "sleep" {
-//		time.Sleep(2 * time.Second)
-//		return
-//	}
-//	proc := execx.Command(os.Args[0], "execx-example", "sleep").
+//	proc := execx.Command("sleep", "2").
 //		Start()
 //	_ = proc.GracefulShutdown(os.Interrupt, 100*time.Millisecond)
 //	res := proc.Wait()

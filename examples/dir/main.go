@@ -13,13 +13,8 @@ func main() {
 	// Dir sets the working directory.
 
 	// Example: change dir
-	if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "pwd" {
-		wd, _ := os.Getwd()
-		fmt.Println(wd)
-		return
-	}
 	dir := os.TempDir()
-	out, _ := execx.Command(os.Args[0], "execx-example", "pwd").
+	out, _ := execx.Command("pwd").
 		Dir(dir).
 		OutputTrimmed()
 	fmt.Println(out == dir)

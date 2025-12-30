@@ -603,7 +603,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)
 
 ### <a id="pdeathsig"></a>Pdeathsig
 
-Pdeathsig is a no-op on non-Linux Unix platforms.
+Pdeathsig sets a parent-death signal on Linux.
 
 _Example: pdeathsig_
 
@@ -683,19 +683,8 @@ fmt.Println(execx.Command("go", "env", "GOOS").Setsid(true) != nil)
 Pipe appends a new command to the pipeline.
 
 ```go
-if len(os.Args) > 2 && os.Args[1] == "execx-example" {
-	switch os.Args[2] {
-	case "emit":
-		fmt.Print("go")
-	case "upper":
-		buf := make([]byte, 8)
-		n, _ := os.Stdin.Read(buf)
-		fmt.Print(strings.ToUpper(string(buf[:n])))
-	}
-	return
-}
-out, _ := execx.Command(os.Args[0], "execx-example", "emit").
-	Pipe(os.Args[0], "execx-example", "upper").
+out, _ := execx.Command("printf", "go").
+	Pipe("tr", "a-z", "A-Z").
 	OutputTrimmed()
 fmt.Println(out)
 // #string GO
@@ -706,18 +695,8 @@ fmt.Println(out)
 PipeBestEffort sets best-effort pipeline semantics.
 
 ```go
-if len(os.Args) > 2 && os.Args[1] == "execx-example" {
-	switch os.Args[2] {
-	case "sleep":
-		time.Sleep(200 * time.Millisecond)
-	case "ok":
-		fmt.Print("ok")
-	}
-	return
-}
-res := execx.Command(os.Args[0], "execx-example", "sleep").
-	WithTimeout(50 * time.Millisecond).
-	Pipe(os.Args[0], "execx-example", "ok").
+res := execx.Command("false").
+	Pipe("printf", "ok").
 	PipeBestEffort().
 	Run()
 fmt.Println(res.Stdout)
@@ -729,21 +708,12 @@ fmt.Println(res.Stdout)
 PipeStrict sets strict pipeline semantics.
 
 ```go
-if len(os.Args) > 2 && os.Args[1] == "execx-example" {
-	switch os.Args[2] {
-	case "fail":
-		os.Exit(2)
-	case "ok":
-		fmt.Print("ok")
-	}
-	return
-}
-res := execx.Command(os.Args[0], "execx-example", "fail").
-	Pipe(os.Args[0], "execx-example", "ok").
+res := execx.Command("false").
+	Pipe("printf", "ok").
 	PipeStrict().
 	Run()
-fmt.Println(res.ExitCode)
-// #int 2
+fmt.Println(res.ExitCode != 0)
+// #bool true
 ```
 
 ### <a id="pipelineresults"></a>PipelineResults
@@ -751,19 +721,8 @@ fmt.Println(res.ExitCode)
 PipelineResults executes the command and returns per-stage results.
 
 ```go
-if len(os.Args) > 2 && os.Args[1] == "execx-example" {
-	switch os.Args[2] {
-	case "emit":
-		fmt.Print("go")
-	case "upper":
-		buf := make([]byte, 8)
-		n, _ := os.Stdin.Read(buf)
-		fmt.Print(strings.ToUpper(string(buf[:n])))
-	}
-	return
-}
-results := execx.Command(os.Args[0], "execx-example", "emit").
-	Pipe(os.Args[0], "execx-example", "upper").
+results := execx.Command("printf", "go").
+	Pipe("tr", "a-z", "A-Z").
 	PipelineResults()
 fmt.Println(len(results))
 // #int 2
@@ -776,11 +735,7 @@ fmt.Println(len(results))
 GracefulShutdown sends a signal and escalates to kill after the timeout.
 
 ```go
-if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "sleep" {
-	time.Sleep(2 * time.Second)
-	return
-}
-proc := execx.Command(os.Args[0], "execx-example", "sleep").
+proc := execx.Command("sleep", "2").
 	Start()
 _ = proc.GracefulShutdown(os.Interrupt, 100*time.Millisecond)
 res := proc.Wait()
@@ -793,11 +748,7 @@ fmt.Println(res.ExitCode != 0)
 Interrupt sends an interrupt signal to the process.
 
 ```go
-if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "sleep" {
-	time.Sleep(2 * time.Second)
-	return
-}
-proc := execx.Command(os.Args[0], "execx-example", "sleep").
+proc := execx.Command("sleep", "2").
 	Start()
 _ = proc.Interrupt()
 res := proc.Wait()
@@ -810,11 +761,7 @@ fmt.Println(res.ExitCode != 0)
 KillAfter terminates the process after the given duration.
 
 ```go
-if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "sleep" {
-	time.Sleep(2 * time.Second)
-	return
-}
-proc := execx.Command(os.Args[0], "execx-example", "sleep").
+proc := execx.Command("sleep", "2").
 	Start()
 proc.KillAfter(100 * time.Millisecond)
 res := proc.Wait()
@@ -827,11 +774,7 @@ fmt.Println(res.ExitCode != 0)
 Send sends a signal to the process.
 
 ```go
-if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "sleep" {
-	time.Sleep(2 * time.Second)
-	return
-}
-proc := execx.Command(os.Args[0], "execx-example", "sleep").
+proc := execx.Command("sleep", "2").
 	Start()
 _ = proc.Send(os.Interrupt)
 res := proc.Wait()
@@ -844,11 +787,7 @@ fmt.Println(res.ExitCode != 0)
 Terminate kills the process immediately.
 
 ```go
-if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "sleep" {
-	time.Sleep(2 * time.Second)
-	return
-}
-proc := execx.Command(os.Args[0], "execx-example", "sleep").
+proc := execx.Command("sleep", "2").
 	Start()
 _ = proc.Terminate()
 res := proc.Wait()
@@ -906,12 +845,8 @@ fmt.Println(res.OK())
 OnStderr registers a line callback for stderr.
 
 ```go
-if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "stderr" {
-	_, _ = os.Stderr.WriteString("err\n")
-	return
-}
 var lines []string
-execx.Command(os.Args[0], "execx-example", "stderr").
+execx.Command("go", "env", "-badflag").
 	OnStderr(func(line string) { lines = append(lines, line) }).
 	Run()
 fmt.Println(len(lines) == 1)
@@ -936,12 +871,8 @@ fmt.Println(len(lines) > 0)
 StderrWriter sets a raw writer for stderr.
 
 ```go
-if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "stderr" {
-	_, _ = os.Stderr.WriteString("err\n")
-	return
-}
 var out strings.Builder
-execx.Command(os.Args[0], "execx-example", "stderr").
+execx.Command("go", "env", "-badflag").
 	StderrWriter(&out).
 	Run()
 fmt.Println(out.Len() > 0)
@@ -968,13 +899,8 @@ fmt.Println(out.Len() > 0)
 Dir sets the working directory.
 
 ```go
-if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "pwd" {
-	wd, _ := os.Getwd()
-	fmt.Println(wd)
-	return
-}
 dir := os.TempDir()
-out, _ := execx.Command(os.Args[0], "execx-example", "pwd").
+out, _ := execx.Command("pwd").
 	Dir(dir).
 	OutputTrimmed()
 fmt.Println(out == dir)
