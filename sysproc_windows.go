@@ -4,59 +4,48 @@ package execx
 
 import "syscall"
 
-// Setpgid is a no-op on Windows.
+// Setpgid is a no-op on Windows; on Unix it places the child in a new process group.
 // @group OS Controls
-//
-// Example: setpgid
-//
-//	fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
-//	// #bool true
 func (c *Cmd) Setpgid(_ bool) *Cmd {
 	return c
 }
 
-// Setsid is a no-op on Windows.
+// Setsid is a no-op on Windows; on Unix it starts a new session.
 // @group OS Controls
-//
-// Example: setsid
-//
-//	fmt.Println(execx.Command("go", "env", "GOOS").Setsid(true) != nil)
-//	// #bool true
 func (c *Cmd) Setsid(_ bool) *Cmd {
 	return c
 }
 
-// Pdeathsig is a no-op on Windows.
+// Pdeathsig is a no-op on Windows; on Linux it signals the child when the parent exits.
 // @group OS Controls
-//
-// Example: pdeathsig
-//
-//	fmt.Println(execx.Command("go", "env", "GOOS").Pdeathsig(0) != nil)
-//	// #bool true
 func (c *Cmd) Pdeathsig(_ syscall.Signal) *Cmd {
 	return c
 }
 
-// CreationFlags sets Windows creation flags.
+// CreationFlags sets Windows process creation flags (for example, create a new process group).
 // @group OS Controls
+//
+// Common flags: execx.CreateNewProcessGroup, execx.CreateNewConsole, execx.CreateNoWindow.
 //
 // Example: creation flags
 //
-//	fmt.Println(execx.Command("go", "env", "GOOS").CreationFlags(0) != nil)
-//	// #bool true
+//	out, _ := execx.Command("printf", "ok").CreationFlags(execx.CreateNewProcessGroup).Output()
+//	fmt.Print(out)
+//	// ok
 func (c *Cmd) CreationFlags(flags uint32) *Cmd {
 	c.ensureSysProcAttr()
 	c.sysProcAttr.CreationFlags = flags
 	return c
 }
 
-// HideWindow controls window visibility and sets CREATE_NO_WINDOW for console apps.
+// HideWindow hides console windows and sets CREATE_NO_WINDOW for console apps.
 // @group OS Controls
 //
 // Example: hide window
 //
-//	fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)
-//	// #bool true
+//	out, _ := execx.Command("printf", "ok").HideWindow(true).Output()
+//	fmt.Print(out)
+//	// ok
 func (c *Cmd) HideWindow(on bool) *Cmd {
 	c.ensureSysProcAttr()
 	c.sysProcAttr.HideWindow = on

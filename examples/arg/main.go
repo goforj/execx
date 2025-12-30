@@ -12,8 +12,8 @@ func main() {
 	// Arg appends arguments to the command.
 
 	// Example: add args
-	cmd := execx.Command("go", "env").Arg("GOOS")
+	cmd := execx.Command("printf").Arg("hello")
 	out, _ := cmd.Output()
-	fmt.Println(out != "")
-	// #bool true
+	fmt.Print(out)
+	// hello
 }

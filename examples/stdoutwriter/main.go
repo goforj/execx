@@ -14,9 +14,9 @@ func main() {
 
 	// Example: stdout writer
 	var out strings.Builder
-	_, err := execx.Command("go", "env", "GOOS").
+	_, _ = execx.Command("printf", "hello").
 		StdoutWriter(&out).
 		Run()
-	fmt.Println(err == nil && out.Len() > 0)
-	// #bool true
+	fmt.Print(out.String())
+	// hello
 }

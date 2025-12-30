@@ -9,15 +9,10 @@ import (
 )
 
 func main() {
-	// Setsid sets the session ID behavior.
+	// Setsid starts the child in a new session, detaching it from the terminal.
 
 	// Example: setsid
-	fmt.Println(execx.Command("go", "env", "GOOS").Setsid(true) != nil)
-	// #bool true
-	// Example: setsid
-	fmt.Println(execx.Command("go", "env", "GOOS").Setsid(true) != nil)
-	// #bool true
-	// Example: setsid
-	fmt.Println(execx.Command("go", "env", "GOOS").Setsid(true) != nil)
-	// #bool true
+	out, _ := execx.Command("printf", "ok").Setsid(true).Output()
+	fmt.Print(out)
+	// ok
 }

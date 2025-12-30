@@ -14,6 +14,7 @@ func main() {
 	// Example: wait
 	proc := execx.Command("go", "env", "GOOS").Start()
 	res, _ := proc.Wait()
-	fmt.Println(res.ExitCode == 0)
-	// #bool true
+	fmt.Printf("%+v", res)
+	// {Stdout:darwin
+	// Stderr: ExitCode:0 Err:<nil> Duration:1.234ms signal:<nil>}
 }

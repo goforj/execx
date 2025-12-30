@@ -6,18 +6,14 @@ package main
 import (
 	"fmt"
 	"github.com/goforj/execx"
+	"syscall"
 )
 
 func main() {
-	// Pdeathsig sets a parent-death signal on Linux.
+	// Pdeathsig sets a parent-death signal on Linux so the child is signaled if the parent exits.
 
 	// Example: pdeathsig
-	fmt.Println(execx.Command("go", "env", "GOOS").Pdeathsig(0) != nil)
-	// #bool true
-	// Example: pdeathsig
-	fmt.Println(execx.Command("go", "env", "GOOS").Pdeathsig(0) != nil)
-	// #bool true
-	// Example: pdeathsig
-	fmt.Println(execx.Command("go", "env", "GOOS").Pdeathsig(0) != nil)
-	// #bool true
+	out, _ := execx.Command("printf", "ok").Pdeathsig(syscall.SIGTERM).Output()
+	fmt.Print(out)
+	// ok
 }

@@ -9,12 +9,10 @@ import (
 )
 
 func main() {
-	// HideWindow controls window visibility and sets CREATE_NO_WINDOW for console apps.
+	// HideWindow hides console windows and sets CREATE_NO_WINDOW for console apps.
 
 	// Example: hide window
-	fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)
-	// #bool true
-	// Example: hide window
-	fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)
-	// #bool true
+	out, _ := execx.Command("printf", "ok").HideWindow(true).Output()
+	fmt.Print(out)
+	// ok
 }

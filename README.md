@@ -14,186 +14,133 @@
     <img src="https://img.shields.io/github/v/tag/goforj/execx?label=version&sort=semver" alt="Latest tag"> 
     <a href="https://codecov.io/gh/goforj/execx" ><img src="https://codecov.io/github/goforj/execx/graph/badge.svg?token=RBB8T6WQ0U"/></a>
 <!-- test-count:embed:start -->
-    <img src="https://img.shields.io/badge/tests-99-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-100-brightgreen" alt="Tests">
 <!-- test-count:embed:end -->
     <a href="https://goreportcard.com/report/github.com/goforj/execx"><img src="https://goreportcard.com/badge/github.com/goforj/execx" alt="Go Report Card"></a>
 </p>
 
-It provides a clean, composable API for running system commands without sacrificing control, correctness, or transparency.  
-No magic. No hidden behavior. Just a better way to work with processes.
+## What execx is
 
-## Why execx?
+execx is a small, explicit wrapper around `os/exec`. It keeps the `exec.Cmd` model but adds fluent construction and consistent result handling.
 
-The standard library’s `os/exec` package is powerful, but verbose and easy to misuse.  
-`execx` keeps the same underlying model while making the common cases obvious and safe.
-
-**execx is for you if you want:**
-
-- Clear, chainable command construction
-- Predictable execution semantics
-- Explicit control over arguments, environment, and I/O
-- Zero shell interpolation or magic
-- A small, auditable API surface
+There is no shell interpolation. Arguments, environment, and I/O are set directly, and nothing runs until you call `Run`, `Output`, or `Start`.
 
 ## Installation
 
 ```bash
 go get github.com/goforj/execx
-````
+```
 
 ## Quick Start
 
 ```go
-out, err := execx.
-    Command("git", "status").
-    Output()
-
+out, _ := execx.Command("echo", "hello").OutputTrimmed()
 fmt.Println(out)
+// #string hello
 ```
 
-Or with structured execution:
+On Windows, use `cmd /c echo hello` or `powershell -Command "echo hello"` for shell built-ins.
+
+## Basic usage
+
+Build a command and run it:
 
 ```go
-res, err := execx.Command("ls", "-la").Run()
-if err != nil {
-    log.Fatal(err)
-}
-
-fmt.Println(res.Stdout)
+cmd := execx.Command("echo").Arg("hello")
+res, _ := cmd.Run()
+fmt.Print(res.Stdout)
+// hello
 ```
-
-## Fluent Command Construction
-
-Commands are built fluently and executed explicitly.
-
-```go
-cmd := execx.
-    Command("docker", "run").
-    Arg("--rm").
-    Arg("-p", "8080:80").
-    Arg("nginx")
-```
-
-Nothing is executed until you call `Run`, `Output`, or `Start`.
-
-## Argument Handling
 
 Arguments are appended deterministically and never shell-expanded.
 
-```go
-cmd.Arg("--env", "PROD")
-cmd.Arg(map[string]string{"--name": "api"})
-```
+## Output handling
 
-This guarantees predictable behavior across platforms.
-
-## Execution Modes
-
-### Run
-
-Execute and return a structured result:
+Use `Output` variants when you only need stdout:
 
 ```go
-_, _ = cmd.Run()
+out, _ := execx.Command("echo", "hello").OutputTrimmed()
+fmt.Println(out)
+// #string hello
 ```
 
-### Output Variants
-
-```go
-out, err := cmd.Output()
-out, err := cmd.OutputBytes()
-out, err := cmd.OutputTrimmed()
-out, err := cmd.CombinedOutput()
-```
-
-### Output
-
-Return stdout directly:
-
-```go
-out, err := cmd.Output()
-```
-
-### Start (async)
-
-```go
-proc := cmd.Start()
-_, _ = proc.Wait()
-proc.KillAfter(5 * time.Second)
-```
-
-## Result Object
-
-Every execution returns a `Result`:
-
-```go
-type Result struct {
-    Stdout   string
-    Stderr   string
-    ExitCode int
-    Err      error
-    Duration time.Duration
-}
-```
-
-* Non-zero exit codes do **not** imply failure
-* `Err` mirrors the returned error (spawn, context, signal)
+`Output`, `OutputBytes`, `OutputTrimmed`, and `CombinedOutput` differ only in how they return data.
 
 ## Pipelining
 
-Chain commands safely (pipeline execution is cross-platform; the commands you choose must exist on that OS):
+Pipelines run on all platforms; command availability is OS-specific.
 
 ```go
-out, err := execx.
-    Command("ps", "aux").
-    Pipe("grep", "nginx").
-    Pipe("awk", "{print $2}").
-    Output()
+out, _ := execx.Command("printf", "go").
+	Pipe("tr", "a-z", "A-Z").
+	OutputTrimmed()
+fmt.Println(out)
+// #string GO
 ```
 
-Pipelines are explicit and deterministic. `PipeStrict` stops at the first failing stage and returns its error. `PipeBestEffort` still runs all stages, returns the last stage output, and surfaces the first error if any stage failed.
+On Windows, use `cmd /c` or `powershell -Command` for shell built-ins.
 
-On Windows, use `cmd /c` or `powershell -Command` to access shell built-ins when needed.
+`PipeStrict` (default) stops at the first failing stage and returns that error.  
+`PipeBestEffort` runs all stages, returns the last stage output, and surfaces the first error if any stage failed.
+
+## Context & cancellation
 
 ```go
-cmd := execx.Command("ps", "aux").Pipe("grep", "nginx")
-cmd.PipeStrict()     // default
-cmd.PipeBestEffort() // returns last stage, surfaces first error
+ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+defer cancel()
+res, _ := execx.Command("go", "env", "GOOS").WithContext(ctx).Run()
+fmt.Println(res.ExitCode == 0)
+// #bool true
 ```
 
-## Context & Timeouts
+## Environment & I/O control
+
+Environment is explicit and deterministic:
 
 ```go
-ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+cmd := execx.Command("echo", "hello").Env("MODE=prod")
+fmt.Println(strings.Contains(strings.Join(cmd.EnvList(), ","), "MODE=prod"))
+// #bool true
+```
+
+Standard input is opt-in:
+
+```go
+out, _ := execx.Command("cat").
+	StdinString("hi").
+	OutputTrimmed()
+fmt.Println(out)
+// #string hi
+```
+
+## Advanced features
+
+For process control, use `Start` with the `Process` helpers:
+
+```go
+proc := execx.Command("go", "env", "GOOS").Start()
+res, _ := proc.Wait()
+fmt.Println(res.ExitCode == 0)
+// #bool true
+```
+
+Signals, timeouts, and OS controls are documented in the API section below.
+
+ShadowPrint is available for emitting the command line before and after execution.
+
+## Kitchen Sink Chaining Example
+
+```go
+// Run executes the command and returns the result and any error.
+
+ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 defer cancel()
 
-execx.Command("sleep", "5").
+res, err := execx.
+    Command("printf", "hello\nworld\n").
+    Pipe("tr", "a-z", "A-Z").
+    Env("MODE=demo").
     WithContext(ctx).
-    Run()
-
-execx.Command("sleep", "5").
-    WithTimeout(2 * time.Second).
-    Run()
-
-execx.Command("sleep", "5").
-    WithDeadline(time.Now().Add(2 * time.Second)).
-    Run()
-```
-
-## Environment Control
-
-```go
-cmd.Env("DEBUG=true")
-cmd.Env(map[string]string{"MODE": "prod"})
-cmd.EnvOnly(map[string]string{"MODE": "prod"})
-cmd.EnvInherit()
-cmd.EnvAppend(map[string]string{"DEBUG": "1"})
-```
-
-## Streaming Output
-
-```go
-cmd.
     OnStdout(func(line string) {
         fmt.Println("OUT:", line)
     }).
@@ -201,64 +148,41 @@ cmd.
         fmt.Println("ERR:", line)
     }).
     Run()
+
+    if !res.OK() {
+        log.Fatalf("command failed: %v", err)
+    }
+
+    fmt.Printf("Stdout: %q\n", res.Stdout)
+    fmt.Printf("Stderr: %q\n", res.Stderr)
+    fmt.Printf("ExitCode: %d\n", res.ExitCode)
+    fmt.Printf("Error: %v\n", res.Err)
+    fmt.Printf("Duration: %v\n", res.Duration)
+    // OUT: HELLO
+    // OUT: WORLD
+    // Stdout: "HELLO\nWORLD\n"
+    // Stderr: ""
+    // ExitCode: 0
+    // Error: <nil>
+    // Duration: 10.123456ms
 ```
 
-## Raw Writers
+## Non-goals and design principles
 
-```go
-cmd.StdoutWriter(os.Stdout)
-cmd.StderrWriter(os.Stderr)
-```
+Design principles:
 
-## Exit Handling
+* Explicit over implicit
+* No shell interpolation
+* Composable, deterministic behavior
 
-```go
-if res.IsExitCode(1) {
-    log.Println("Command failed")
-}
-```
-
-## Debugging Helpers
-
-```go
-cmd.Args()
-cmd.EnvList()
-cmd.ShellEscaped()
-```
-
-## Design Principles
-
-* **Explicit over implicit**
-* **No hidden behavior**
-* **No shell magic**
-* **Composable over clever**
-* **Predictable over flexible**
-
-`execx` is intentionally boring — in the best possible way.
-
-## Non-Goals
+Non-goals:
 
 * Shell scripting replacement
 * Command parsing or glob expansion
 * Task runners or build systems
 * Automatic retries or heuristics
 
-## Testing & Reliability
-
-* 100% public API coverage
-* Deterministic behavior
-* No global state
-* Safe for concurrent read-only use; mutation during execution is undefined
-
-## Runnable examples
-
-Every function has a corresponding runnable example under [`./examples`](./examples).
-
-These examples are **generated directly from the documentation blocks** of each function, ensuring the docs and code never drift. These are the same examples you see here in the README and GoDoc.
-
-An automated test executes **every example** to verify it builds and runs successfully.
-
-This guarantees all examples are valid, up-to-date, and remain functional as the API evolves.
+All public APIs are covered by runnable examples under `./examples`, and the test suite executes them to keep docs and behavior in sync.
 
 <!-- api:embed:start -->
 
@@ -280,6 +204,7 @@ This guarantees all examples are valid, up-to-date, and remain functional as the
 | **Results** | [IsExitCode](#isexitcode) [IsSignal](#issignal) [OK](#ok) |
 | **Streaming** | [OnStderr](#onstderr) [OnStdout](#onstdout) [StderrWriter](#stderrwriter) [StdoutWriter](#stdoutwriter) |
 | **WorkingDir** | [Dir](#dir) |
+| **User Feedback** | [ShadowPrint](#shadowprint) [ShadowPrintOff](#shadowprintoff) [ShadowPrintPrefix](#shadowprintprefix) [ShadowPrintMask](#shadowprintmask) [ShadowPrintFormatter](#shadowprintformatter) |
 
 
 ## Arguments
@@ -289,10 +214,10 @@ This guarantees all examples are valid, up-to-date, and remain functional as the
 Arg appends arguments to the command.
 
 ```go
-cmd := execx.Command("go", "env").Arg("GOOS")
+cmd := execx.Command("printf").Arg("hello")
 out, _ := cmd.Output()
-fmt.Println(out != "")
-// #bool true
+fmt.Print(out)
+// hello
 ```
 
 ## Construction
@@ -302,10 +227,10 @@ fmt.Println(out != "")
 Command constructs a new command without executing it.
 
 ```go
-cmd := execx.Command("go", "env", "GOOS")
+cmd := execx.Command("printf", "hello")
 out, _ := cmd.Output()
-fmt.Println(out != "")
-// #bool true
+fmt.Print(out)
+// hello
 ```
 
 ## Context
@@ -362,6 +287,62 @@ ShellEscaped returns a shell-escaped string for logging only.
 cmd := execx.Command("echo", "hello world", "it's")
 fmt.Println(cmd.ShellEscaped())
 // #string echo 'hello world' 'it'\\''s'
+```
+
+## User Feedback
+
+### <a id="shadowprint"></a>ShadowPrint
+
+ShadowPrint writes the shell-escaped command to stderr before and after execution.
+
+```go
+_, _ = execx.Command("printf", "hi").ShadowPrint().Run()
+// execx > printf hi
+// execx > printf hi (1ms)
+```
+
+### <a id="shadowprintoff"></a>ShadowPrintOff
+
+ShadowPrintOff disables shadow printing for this command chain.
+
+```go
+_, _ = execx.Command("printf", "hi").ShadowPrint().ShadowPrintOff().Run()
+```
+
+### <a id="shadowprintprefix"></a>ShadowPrintPrefix
+
+ShadowPrintPrefix sets the prefix used by ShadowPrint.
+
+```go
+_, _ = execx.Command("printf", "hi").ShadowPrintPrefix("run").Run()
+// run > printf hi
+// run > printf hi (1ms)
+```
+
+### <a id="shadowprintmask"></a>ShadowPrintMask
+
+ShadowPrintMask applies a masker to the shadow-printed command string.
+
+```go
+mask := func(cmd string) string {
+	return strings.ReplaceAll(cmd, "secret", "***")
+}
+_, _ = execx.Command("printf", "secret").ShadowPrintMask(mask).Run()
+// execx > printf ***
+// execx > printf *** (1ms)
+```
+
+### <a id="shadowprintformatter"></a>ShadowPrintFormatter
+
+ShadowPrintFormatter sets a formatter for ShadowPrint output.
+
+```go
+formatter := func(ev execx.ShadowEvent) string {
+	return fmt.Sprintf("shadow: %s %s", ev.Phase, ev.Command)
+}
+_, _ = execx.Command("printf", "hi").ShadowPrintFormatter(formatter).Run()
+// shadow: before printf hi
+// shadow: after printf hi
 ```
 
 ### <a id="string"></a>String
@@ -455,9 +436,13 @@ fmt.Println(err.Unwrap() != nil)
 CombinedOutput executes the command and returns stdout+stderr and any error.
 
 ```go
-out, _ := execx.Command("go", "env", "GOOS").CombinedOutput()
-fmt.Println(out != "")
-// #bool true
+out, err := execx.Command("go", "env", "-badflag").CombinedOutput()
+fmt.Print(out)
+fmt.Println(err == nil)
+// flag provided but not defined: -badflag
+// usage: go env [-json] [-changed] [-u] [-w] [var ...]
+// Run 'go help env' for details.
+// false
 ```
 
 ### <a id="output"></a>Output
@@ -465,9 +450,9 @@ fmt.Println(out != "")
 Output executes the command and returns stdout and any error.
 
 ```go
-out, _ := execx.Command("go", "env", "GOOS").Output()
-fmt.Println(out != "")
-// #bool true
+out, _ := execx.Command("printf", "hello").Output()
+fmt.Print(out)
+// hello
 ```
 
 ### <a id="outputbytes"></a>OutputBytes
@@ -475,9 +460,9 @@ fmt.Println(out != "")
 OutputBytes executes the command and returns stdout bytes and any error.
 
 ```go
-out, _ := execx.Command("go", "env", "GOOS").OutputBytes()
-fmt.Println(len(out) > 0)
-// #bool true
+out, _ := execx.Command("printf", "hello").OutputBytes()
+fmt.Println(string(out))
+// #string hello
 ```
 
 ### <a id="outputtrimmed"></a>OutputTrimmed
@@ -485,9 +470,9 @@ fmt.Println(len(out) > 0)
 OutputTrimmed executes the command and returns trimmed stdout and any error.
 
 ```go
-out, _ := execx.Command("go", "env", "GOOS").OutputTrimmed()
-fmt.Println(out != "")
-// #bool true
+out, _ := execx.Command("printf", "hello\n").OutputTrimmed()
+fmt.Println(out)
+// #string hello
 ```
 
 ### <a id="run"></a>Run
@@ -566,115 +551,62 @@ fmt.Println(out)
 
 ## OS Controls
 
+OS controls map to `syscall.SysProcAttr` for process/session configuration. Use them when you need process groups, detached sessions, or OS-specific process creation flags. On unsupported platforms they are no-ops.
+
 ### <a id="creationflags"></a>CreationFlags
 
-CreationFlags is a no-op on non-Windows platforms.
+CreationFlags sets Windows process creation flags (for example, create a new process group). It is a no-op on non-Windows platforms.
 
-_Example: creation flags_
+Common flags:
 
-```go
-fmt.Println(execx.Command("go", "env", "GOOS").CreationFlags(0) != nil)
-// #bool true
-```
-
-_Example: creation flags_
+- `execx.CreateNewProcessGroup`
+- `execx.CreateNewConsole`
+- `execx.CreateNoWindow`
 
 ```go
-fmt.Println(execx.Command("go", "env", "GOOS").CreationFlags(0) != nil)
-// #bool true
+out, _ := execx.Command("printf", "ok").CreationFlags(execx.CreateNewProcessGroup).Output()
+fmt.Print(out)
+// ok
 ```
 
 ### <a id="hidewindow"></a>HideWindow
 
-HideWindow is a no-op on non-Windows platforms.
-
-_Example: hide window_
+HideWindow hides console windows on Windows (it sets `SysProcAttr.HideWindow` and `CREATE_NO_WINDOW`). It is a no-op on non-Windows platforms.
 
 ```go
-fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)
-// #bool true
-```
-
-_Example: hide window_
-
-```go
-fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)
-// #bool true
+out, _ := execx.Command("printf", "ok").HideWindow(true).Output()
+fmt.Print(out)
+// ok
 ```
 
 ### <a id="pdeathsig"></a>Pdeathsig
 
-Pdeathsig sets a parent-death signal on Linux.
-
-_Example: pdeathsig_
+Pdeathsig sets a parent-death signal on Linux so the child receives a signal if the parent exits. It is a no-op on non-Linux platforms.
 
 ```go
-fmt.Println(execx.Command("go", "env", "GOOS").Pdeathsig(0) != nil)
-// #bool true
-```
-
-_Example: pdeathsig_
-
-```go
-fmt.Println(execx.Command("go", "env", "GOOS").Pdeathsig(0) != nil)
-// #bool true
-```
-
-_Example: pdeathsig_
-
-```go
-fmt.Println(execx.Command("go", "env", "GOOS").Pdeathsig(0) != nil)
-// #bool true
+out, _ := execx.Command("printf", "ok").Pdeathsig(syscall.SIGTERM).Output()
+fmt.Print(out)
+// ok
 ```
 
 ### <a id="setpgid"></a>Setpgid
 
-Setpgid sets the process group ID behavior.
-
-_Example: setpgid_
+Setpgid places the child in a new process group. Use this when you want to signal or terminate a group independently of the parent.
 
 ```go
-fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
-// #bool true
-```
-
-_Example: setpgid_
-
-```go
-fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
-// #bool true
-```
-
-_Example: setpgid_
-
-```go
-fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
-// #bool true
+out, _ := execx.Command("printf", "ok").Setpgid(true).Output()
+fmt.Print(out)
+// ok
 ```
 
 ### <a id="setsid"></a>Setsid
 
-Setsid sets the session ID behavior.
-
-_Example: setsid_
+Setsid starts the child in a new session, detaching it from the controlling terminal.
 
 ```go
-fmt.Println(execx.Command("go", "env", "GOOS").Setsid(true) != nil)
-// #bool true
-```
-
-_Example: setsid_
-
-```go
-fmt.Println(execx.Command("go", "env", "GOOS").Setsid(true) != nil)
-// #bool true
-```
-
-_Example: setsid_
-
-```go
-fmt.Println(execx.Command("go", "env", "GOOS").Setsid(true) != nil)
-// #bool true
+out, _ := execx.Command("printf", "ok").Setsid(true).Output()
+fmt.Print(out)
+// ok
 ```
 
 ## Pipelining
@@ -696,12 +628,12 @@ fmt.Println(out)
 PipeBestEffort sets best-effort pipeline semantics (run all stages, surface the first error).
 
 ```go
-res, err := execx.Command("false").
+res, _ := execx.Command("false").
 	Pipe("printf", "ok").
 	PipeBestEffort().
 	Run()
-fmt.Println(err == nil && res.Stdout == "ok")
-// #bool true
+fmt.Print(res.Stdout)
+// ok
 ```
 
 ### <a id="pipestrict"></a>PipeStrict
@@ -722,11 +654,14 @@ fmt.Println(res.ExitCode != 0)
 PipelineResults executes the command and returns per-stage results and any error.
 
 ```go
-results, err := execx.Command("printf", "go").
+results, _ := execx.Command("printf", "go").
 	Pipe("tr", "a-z", "A-Z").
 	PipelineResults()
-fmt.Println(err == nil && len(results) == 2)
-// #bool true
+fmt.Printf("%+v", results)
+// [
+//	{Stdout:go Stderr: ExitCode:0 Err:<nil> Duration:6.367208ms signal:<nil>}
+//	{Stdout:GO Stderr: ExitCode:0 Err:<nil> Duration:4.976291ms signal:<nil>}
+// ]
 ```
 
 ## Process
@@ -738,8 +673,8 @@ GracefulShutdown sends a signal and escalates to kill after the timeout.
 ```go
 proc := execx.Command("sleep", "2").Start()
 _ = proc.GracefulShutdown(os.Interrupt, 100*time.Millisecond)
-res, err := proc.Wait()
-fmt.Println(err != nil || res.ExitCode != 0)
+res, _ := proc.Wait()
+fmt.Println(res.IsSignal(os.Interrupt))
 // #bool true
 ```
 
@@ -750,9 +685,9 @@ Interrupt sends an interrupt signal to the process.
 ```go
 proc := execx.Command("sleep", "2").Start()
 _ = proc.Interrupt()
-res, err := proc.Wait()
-fmt.Println(err != nil || res.ExitCode != 0)
-// #bool true
+res, _ := proc.Wait()
+fmt.Printf("%+v", res)
+// {Stdout: Stderr: ExitCode:-1 Err:<nil> Duration:75.987ms signal:interrupt}
 ```
 
 ### <a id="killafter"></a>KillAfter
@@ -762,9 +697,9 @@ KillAfter terminates the process after the given duration.
 ```go
 proc := execx.Command("sleep", "2").Start()
 proc.KillAfter(100 * time.Millisecond)
-res, err := proc.Wait()
-fmt.Println(err != nil || res.ExitCode != 0)
-// #bool true
+res, _ := proc.Wait()
+fmt.Printf("%+v", res)
+// {Stdout: Stderr: ExitCode:-1 Err:<nil> Duration:100.456ms signal:killed}
 ```
 
 ### <a id="send"></a>Send
@@ -774,9 +709,9 @@ Send sends a signal to the process.
 ```go
 proc := execx.Command("sleep", "2").Start()
 _ = proc.Send(os.Interrupt)
-res, err := proc.Wait()
-fmt.Println(err != nil || res.ExitCode != 0)
-// #bool true
+res, _ := proc.Wait()
+fmt.Printf("%+v", res)
+// {Stdout: Stderr: ExitCode:-1 Err:<nil> Duration:80.123ms signal:interrupt}
 ```
 
 ### <a id="terminate"></a>Terminate
@@ -786,9 +721,9 @@ Terminate kills the process immediately.
 ```go
 proc := execx.Command("sleep", "2").Start()
 _ = proc.Terminate()
-res, err := proc.Wait()
-fmt.Println(err != nil || res.ExitCode != 0)
-// #bool true
+res, _ := proc.Wait()
+fmt.Printf("%+v", res)
+// {Stdout: Stderr: ExitCode:-1 Err:<nil> Duration:70.654ms signal:killed}
 ```
 
 ### <a id="wait"></a>Wait
@@ -798,8 +733,9 @@ Wait waits for the command to complete and returns the result and any error.
 ```go
 proc := execx.Command("go", "env", "GOOS").Start()
 res, _ := proc.Wait()
-fmt.Println(res.ExitCode == 0)
-// #bool true
+fmt.Printf("%+v", res)
+// {Stdout:darwin
+// Stderr: ExitCode:0 Err:<nil> Duration:1.234ms signal:<nil>}
 ```
 
 ## Results
@@ -850,7 +786,7 @@ fmt.Println(err == nil)
 // flag provided but not defined: -badflag
 // usage: go env [-json] [-changed] [-u] [-w] [var ...]
 // Run 'go help env' for details.
-// true
+// false
 ```
 
 ### <a id="onstdout"></a>OnStdout
@@ -858,10 +794,10 @@ fmt.Println(err == nil)
 OnStdout registers a line callback for stdout.
 
 ```go
-_, _ = execx.Command("go", "env", "GOOS").
+_, _ = execx.Command("printf", "hi\n").
 	OnStdout(func(line string) { fmt.Println(line) }).
 	Run()
-// darwin
+// hi
 ```
 
 ### <a id="stderrwriter"></a>StderrWriter
@@ -878,7 +814,7 @@ fmt.Println(err == nil)
 // flag provided but not defined: -badflag
 // usage: go env [-json] [-changed] [-u] [-w] [var ...]
 // Run 'go help env' for details.
-// true
+// false
 ```
 
 ### <a id="stdoutwriter"></a>StdoutWriter
@@ -887,11 +823,11 @@ StdoutWriter sets a raw writer for stdout.
 
 ```go
 var out strings.Builder
-_, err := execx.Command("go", "env", "GOOS").
+_, _ = execx.Command("printf", "hello").
 	StdoutWriter(&out).
 	Run()
-fmt.Println(err == nil && out.Len() > 0)
-// #bool true
+fmt.Print(out.String())
+// hello
 ```
 
 ## WorkingDir
