@@ -126,6 +126,8 @@ fmt.Println(res.ExitCode == 0)
 
 Signals, timeouts, and OS controls are documented in the API section below.
 
+ShadowPrint is available for emitting the command line before and after execution.
+
 ## Kitchen Sink Chaining Example
 
 ```go
@@ -202,6 +204,7 @@ All public APIs are covered by runnable examples under `./examples`, and the tes
 | **Results** | [IsExitCode](#isexitcode) [IsSignal](#issignal) [OK](#ok) |
 | **Streaming** | [OnStderr](#onstderr) [OnStdout](#onstdout) [StderrWriter](#stderrwriter) [StdoutWriter](#stdoutwriter) |
 | **WorkingDir** | [Dir](#dir) |
+| **User Feedback** | [ShadowPrint](#shadowprint) [ShadowPrintOff](#shadowprintoff) [ShadowPrintPrefix](#shadowprintprefix) [ShadowPrintMask](#shadowprintmask) [ShadowPrintFormatter](#shadowprintformatter) |
 
 
 ## Arguments
@@ -284,6 +287,62 @@ ShellEscaped returns a shell-escaped string for logging only.
 cmd := execx.Command("echo", "hello world", "it's")
 fmt.Println(cmd.ShellEscaped())
 // #string echo 'hello world' 'it'\\''s'
+```
+
+## User Feedback
+
+### <a id="shadowprint"></a>ShadowPrint
+
+ShadowPrint writes the shell-escaped command to stderr before and after execution.
+
+```go
+_, _ = execx.Command("printf", "hi").ShadowPrint().Run()
+// execx > printf hi
+// execx > printf hi (1ms)
+```
+
+### <a id="shadowprintoff"></a>ShadowPrintOff
+
+ShadowPrintOff disables shadow printing for this command chain.
+
+```go
+_, _ = execx.Command("printf", "hi").ShadowPrint().ShadowPrintOff().Run()
+```
+
+### <a id="shadowprintprefix"></a>ShadowPrintPrefix
+
+ShadowPrintPrefix sets the prefix used by ShadowPrint.
+
+```go
+_, _ = execx.Command("printf", "hi").ShadowPrintPrefix("run").Run()
+// run > printf hi
+// run > printf hi (1ms)
+```
+
+### <a id="shadowprintmask"></a>ShadowPrintMask
+
+ShadowPrintMask applies a masker to the shadow-printed command string.
+
+```go
+mask := func(cmd string) string {
+	return strings.ReplaceAll(cmd, "secret", "***")
+}
+_, _ = execx.Command("printf", "secret").ShadowPrintMask(mask).Run()
+// execx > printf ***
+// execx > printf *** (1ms)
+```
+
+### <a id="shadowprintformatter"></a>ShadowPrintFormatter
+
+ShadowPrintFormatter sets a formatter for ShadowPrint output.
+
+```go
+formatter := func(ev execx.ShadowEvent) string {
+	return fmt.Sprintf("shadow: %s %s", ev.Phase, ev.Command)
+}
+_, _ = execx.Command("printf", "hi").ShadowPrintFormatter(formatter).Run()
+// shadow: before printf hi
+// shadow: after printf hi
 ```
 
 ### <a id="string"></a>String

@@ -74,6 +74,11 @@ type Cmd struct {
 	next     *Cmd
 	root     *Cmd
 	pipeMode pipeMode
+
+	shadowPrint     bool
+	shadowPrefix    string
+	shadowFormatter func(ShadowEvent) string
+	shadowMask      func(string) string
 }
 
 // Arg appends arguments to the command.
@@ -527,6 +532,82 @@ func (c *Cmd) ShellEscaped() string {
 	return strings.Join(parts, " ")
 }
 
+// ShadowPrint writes the shell-escaped command to stderr before and after execution.
+// @group User Feedback
+//
+// Example: shadow print
+//
+//	_, _ = execx.Command("printf", "hi").ShadowPrint().Run()
+//	// execx > printf hi
+//	// execx > printf hi (1ms)
+func (c *Cmd) ShadowPrint() *Cmd {
+	c.rootCmd().shadowPrint = true
+	return c
+}
+
+// ShadowPrintOff disables shadow printing for this command chain.
+// @group User Feedback
+//
+// Example: shadow print off
+//
+//	_, _ = execx.Command("printf", "hi").ShadowPrint().ShadowPrintOff().Run()
+func (c *Cmd) ShadowPrintOff() *Cmd {
+	root := c.rootCmd()
+	root.shadowPrint = false
+	return c
+}
+
+// ShadowPrintPrefix sets the prefix used by ShadowPrint.
+// @group User Feedback
+//
+// Example: shadow print prefix
+//
+//	_, _ = execx.Command("printf", "hi").ShadowPrintPrefix("run").Run()
+//	// run > printf hi
+//	// run > printf hi (1ms)
+func (c *Cmd) ShadowPrintPrefix(prefix string) *Cmd {
+	root := c.rootCmd()
+	root.shadowPrint = true
+	root.shadowPrefix = prefix
+	return c
+}
+
+// ShadowPrintMask sets a command masker for ShadowPrint output.
+// @group User Feedback
+//
+// Example: shadow print mask
+//
+//	mask := func(cmd string) string {
+//		return strings.ReplaceAll(cmd, "secret", "***")
+//	}
+//	_, _ = execx.Command("printf", "secret").ShadowPrintMask(mask).Run()
+//	// execx > printf ***
+//	// execx > printf *** (1ms)
+func (c *Cmd) ShadowPrintMask(fn func(string) string) *Cmd {
+	root := c.rootCmd()
+	root.shadowPrint = true
+	root.shadowMask = fn
+	return c
+}
+
+// ShadowPrintFormatter sets a formatter for ShadowPrint output.
+// @group User Feedback
+//
+// Example: shadow print formatter
+//
+//	formatter := func(ev execx.ShadowEvent) string {
+//		return fmt.Sprintf("shadow: %s %s", ev.Phase, ev.Command)
+//	}
+//	_, _ = execx.Command("printf", "hi").ShadowPrintFormatter(formatter).Run()
+//	// shadow: before printf hi
+//	// shadow: after printf hi
+func (c *Cmd) ShadowPrintFormatter(fn func(ShadowEvent) string) *Cmd {
+	root := c.rootCmd()
+	root.shadowPrint = true
+	root.shadowFormatter = fn
+	return c
+}
+
 // Run executes the command and returns the result and any error.
 // @group Execution
 //
@@ -536,10 +617,12 @@ func (c *Cmd) ShellEscaped() string {
 //	fmt.Println(res.ExitCode == 0)
 //	// #bool true
 func (c *Cmd) Run() (Result, error) {
+	shadow := c.shadowPrintStart(false)
 	pipe := c.newPipeline(false)
 	pipe.start()
 	pipe.wait()
 	result, _ := pipe.primaryResult(c.rootCmd().pipeMode)
+	shadow.finish()
 	return result, result.Err
 }
 
@@ -595,10 +678,12 @@ func (c *Cmd) OutputTrimmed() (string, error) {
 //	// Run 'go help env' for details.
 //	// false
 func (c *Cmd) CombinedOutput() (string, error) {
+	shadow := c.shadowPrintStart(false)
 	pipe := c.newPipeline(true)
 	pipe.start()
 	pipe.wait()
 	result, combined := pipe.primaryResult(c.rootCmd().pipeMode)
+	shadow.finish()
 	return combined, result.Err
 }
 
@@ -616,10 +701,12 @@ func (c *Cmd) CombinedOutput() (string, error) {
 //	//	{Stdout:GO Stderr: ExitCode:0 Err:<nil> Duration:4.976291ms signal:<nil>}
 //	// ]
 func (c *Cmd) PipelineResults() ([]Result, error) {
+	shadow := c.shadowPrintStart(false)
 	pipe := c.newPipeline(false)
 	pipe.start()
 	pipe.wait()
 	results := pipe.results()
+	shadow.finish()
 	return results, firstResultErr(results)
 }
 
@@ -633,6 +720,7 @@ func (c *Cmd) PipelineResults() ([]Result, error) {
 //	fmt.Println(res.ExitCode == 0)
 //	// #bool true
 func (c *Cmd) Start() *Process {
+	shadow := c.shadowPrintStart(true)
 	pipe := c.newPipeline(false)
 	pipe.start()
 
@@ -640,6 +728,7 @@ func (c *Cmd) Start() *Process {
 		pipeline: pipe,
 		mode:     c.rootCmd().pipeMode,
 		done:     make(chan struct{}),
+		shadow:   shadow,
 	}
 	go func() {
 		pipe.wait()
@@ -776,12 +865,121 @@ func shellEscape(arg string) string {
 	return "'" + strings.ReplaceAll(arg, "'", "'\\''") + "'"
 }
 
+type shadowContext struct {
+	cmd   *Cmd
+	start time.Time
+	async bool
+}
+
+// ShadowPhase describes whether the shadow print is before or after execution.
+type ShadowPhase string
+
+const (
+	ShadowBefore ShadowPhase = "before"
+	ShadowAfter  ShadowPhase = "after"
+)
+
+// ShadowEvent captures details for ShadowPrint formatting.
+type ShadowEvent struct {
+	Command    string
+	RawCommand string
+	Phase      ShadowPhase
+	Duration   time.Duration
+	Async      bool
+}
+
+func (c *Cmd) shadowPrintStart(async bool) *shadowContext {
+	root := c.rootCmd()
+	if root == nil || !root.shadowPrint {
+		return nil
+	}
+	ctx := &shadowContext{
+		cmd:   root,
+		start: time.Now(),
+		async: async,
+	}
+	shadowPrintLine(root, ShadowBefore, 0, async)
+	return ctx
+}
+
+func (c *Cmd) shadowCommand() string {
+	root := c.rootCmd()
+	if root == nil {
+		return ""
+	}
+	parts := []string{}
+	for stage := root; stage != nil; stage = stage.next {
+		parts = append(parts, stage.ShellEscaped())
+	}
+	return strings.Join(parts, " | ")
+}
+
+func (s *shadowContext) finish() {
+	if s == nil || s.cmd == nil {
+		return
+	}
+	duration := time.Since(s.start).Round(time.Millisecond)
+	shadowPrintLine(s.cmd, ShadowAfter, duration, s.async)
+}
+
+func shadowPrintLine(cmd *Cmd, phase ShadowPhase, duration time.Duration, async bool) {
+	if cmd == nil {
+		return
+	}
+	rawCommand := cmd.shadowCommand()
+	commandLine := rawCommand
+	if cmd.shadowMask != nil {
+		commandLine = cmd.shadowMask(commandLine)
+	}
+	event := ShadowEvent{
+		Command:    commandLine,
+		RawCommand: rawCommand,
+		Phase:      phase,
+		Duration:   duration,
+		Async:      async,
+	}
+	if cmd.shadowFormatter != nil {
+		line := cmd.shadowFormatter(event)
+		if line != "" {
+			fmt.Fprintln(os.Stderr, line)
+		}
+		return
+	}
+	prefix := cmd.shadowPrefix
+	if prefix == "" {
+		prefix = "execx"
+	}
+	timing := ""
+	if phase == ShadowAfter {
+		timing = " (" + duration.String()
+		if async {
+			timing += ", async"
+		}
+		timing += ")"
+	} else if async {
+		timing = " (async)"
+	}
+	fmt.Fprintf(
+		os.Stderr,
+		"%s%s > %s%s%s%s%s\n",
+		shadowBoldHighIntensityBlack,
+		prefix,
+		shadowReset,
+		shadowHighIntensityBlack,
+		commandLine,
+		shadowFadedGray,
+		timing+shadowReset,
+	)
+}
+
 // Process represents an asynchronously running command.
 type Process struct {
 	pipeline *pipeline
 	mode     pipeMode
 	done     chan struct{}
 	result   Result
+
+	shadow *shadowContext
 
 	resultOnce sync.Once
 	mu         sync.Mutex
@@ -900,6 +1098,7 @@ func (p *Process) GracefulShutdown(sig os.Signal, timeout time.Duration) error {
 func (p *Process) finish(result Result) {
 	p.resultOnce.Do(func() {
 		p.result = result
+		p.shadow.finish()
 		close(p.done)
 	})
 }
