@@ -36,10 +36,10 @@ const (
 //
 // Example: command
 //
-//	cmd := execx.Command("go", "env", "GOOS")
+//	cmd := execx.Command("printf", "hello")
 //	out, _ := cmd.Output()
-//	fmt.Println(out != "")
-//	// #bool true
+//	fmt.Print(out)
+//	// hello
 func Command(name string, args ...string) *Cmd {
 	cmd := &Cmd{
 		name:     name,
@@ -81,10 +81,10 @@ type Cmd struct {
 //
 // Example: add args
 //
-//	cmd := execx.Command("go", "env").Arg("GOOS")
+//	cmd := execx.Command("printf").Arg("hello")
 //	out, _ := cmd.Output()
-//	fmt.Println(out != "")
-//	// #bool true
+//	fmt.Print(out)
+//	// hello
 func (c *Cmd) Arg(values ...any) *Cmd {
 	for _, value := range values {
 		switch v := value.(type) {
@@ -373,11 +373,11 @@ func (c *Cmd) OnStderr(fn func(string)) *Cmd {
 // Example: stdout writer
 //
 //	var out strings.Builder
-//	_, err := execx.Command("go", "env", "GOOS").
+//	_, _ = execx.Command("printf", "hello").
 //		StdoutWriter(&out).
 //		Run()
-//	fmt.Println(err == nil && out.Len() > 0)
-//	// #bool true
+//	fmt.Print(out.String())
+//	// hello
 func (c *Cmd) StdoutWriter(w io.Writer) *Cmd {
 	c.stdoutW = w
 	return c
@@ -397,7 +397,7 @@ func (c *Cmd) StdoutWriter(w io.Writer) *Cmd {
 //	// flag provided but not defined: -badflag
 //	// usage: go env [-json] [-changed] [-u] [-w] [var ...]
 //	// Run 'go help env' for details.
-//	// true
+//	// false
 func (c *Cmd) StderrWriter(w io.Writer) *Cmd {
 	c.stderrW = w
 	return c
@@ -548,9 +548,9 @@ func (c *Cmd) Run() (Result, error) {
 //
 // Example: output
 //
-//	out, _ := execx.Command("go", "env", "GOOS").Output()
-//	fmt.Println(out != "")
-//	// #bool true
+//	out, _ := execx.Command("printf", "hello").Output()
+//	fmt.Print(out)
+//	// hello
 func (c *Cmd) Output() (string, error) {
 	result, err := c.Run()
 	return result.Stdout, err
@@ -561,9 +561,9 @@ func (c *Cmd) Output() (string, error) {
 //
 // Example: output bytes
 //
-//	out, _ := execx.Command("go", "env", "GOOS").OutputBytes()
-//	fmt.Println(len(out) > 0)
-//	// #bool true
+//	out, _ := execx.Command("printf", "hello").OutputBytes()
+//	fmt.Println(string(out))
+//	// #string hello
 func (c *Cmd) OutputBytes() ([]byte, error) {
 	result, err := c.Run()
 	return []byte(result.Stdout), err
@@ -574,9 +574,9 @@ func (c *Cmd) OutputBytes() ([]byte, error) {
 //
 // Example: output trimmed
 //
-//	out, _ := execx.Command("go", "env", "GOOS").OutputTrimmed()
-//	fmt.Println(out != "")
-//	// #bool true
+//	out, _ := execx.Command("printf", "hello\n").OutputTrimmed()
+//	fmt.Println(out)
+//	// #string hello
 func (c *Cmd) OutputTrimmed() (string, error) {
 	result, err := c.Run()
 	return strings.TrimSpace(result.Stdout), err
@@ -587,9 +587,13 @@ func (c *Cmd) OutputTrimmed() (string, error) {
 //
 // Example: combined output
 //
-//	out, _ := execx.Command("go", "env", "GOOS").CombinedOutput()
-//	fmt.Println(out != "")
-//	// #bool true
+//	out, err := execx.Command("go", "env", "-badflag").CombinedOutput()
+//	fmt.Print(out)
+//	fmt.Println(err == nil)
+//	// flag provided but not defined: -badflag
+//	// usage: go env [-json] [-changed] [-u] [-w] [var ...]
+//	// Run 'go help env' for details.
+//	// false
 func (c *Cmd) CombinedOutput() (string, error) {
 	pipe := c.newPipeline(true)
 	pipe.start()

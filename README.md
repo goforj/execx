@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/github/v/tag/goforj/execx?label=version&sort=semver" alt="Latest tag"> 
     <a href="https://codecov.io/gh/goforj/execx" ><img src="https://codecov.io/github/goforj/execx/graph/badge.svg?token=RBB8T6WQ0U"/></a>
 <!-- test-count:embed:start -->
-    <img src="https://img.shields.io/badge/tests-99-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-100-brightgreen" alt="Tests">
 <!-- test-count:embed:end -->
     <a href="https://goreportcard.com/report/github.com/goforj/execx"><img src="https://goreportcard.com/badge/github.com/goforj/execx" alt="Go Report Card"></a>
 </p>
@@ -211,10 +211,10 @@ All public APIs are covered by runnable examples under `./examples`, and the tes
 Arg appends arguments to the command.
 
 ```go
-cmd := execx.Command("go", "env").Arg("GOOS")
+cmd := execx.Command("printf").Arg("hello")
 out, _ := cmd.Output()
-fmt.Println(out != "")
-// #bool true
+fmt.Print(out)
+// hello
 ```
 
 ## Construction
@@ -224,10 +224,10 @@ fmt.Println(out != "")
 Command constructs a new command without executing it.
 
 ```go
-cmd := execx.Command("go", "env", "GOOS")
+cmd := execx.Command("printf", "hello")
 out, _ := cmd.Output()
-fmt.Println(out != "")
-// #bool true
+fmt.Print(out)
+// hello
 ```
 
 ## Context
@@ -377,9 +377,13 @@ fmt.Println(err.Unwrap() != nil)
 CombinedOutput executes the command and returns stdout+stderr and any error.
 
 ```go
-out, _ := execx.Command("go", "env", "GOOS").CombinedOutput()
-fmt.Println(out != "")
-// #bool true
+out, err := execx.Command("go", "env", "-badflag").CombinedOutput()
+fmt.Print(out)
+fmt.Println(err == nil)
+// flag provided but not defined: -badflag
+// usage: go env [-json] [-changed] [-u] [-w] [var ...]
+// Run 'go help env' for details.
+// false
 ```
 
 ### <a id="output"></a>Output
@@ -387,9 +391,9 @@ fmt.Println(out != "")
 Output executes the command and returns stdout and any error.
 
 ```go
-out, _ := execx.Command("go", "env", "GOOS").Output()
-fmt.Println(out != "")
-// #bool true
+out, _ := execx.Command("printf", "hello").Output()
+fmt.Print(out)
+// hello
 ```
 
 ### <a id="outputbytes"></a>OutputBytes
@@ -397,9 +401,9 @@ fmt.Println(out != "")
 OutputBytes executes the command and returns stdout bytes and any error.
 
 ```go
-out, _ := execx.Command("go", "env", "GOOS").OutputBytes()
-fmt.Println(len(out) > 0)
-// #bool true
+out, _ := execx.Command("printf", "hello").OutputBytes()
+fmt.Println(string(out))
+// #string hello
 ```
 
 ### <a id="outputtrimmed"></a>OutputTrimmed
@@ -407,9 +411,9 @@ fmt.Println(len(out) > 0)
 OutputTrimmed executes the command and returns trimmed stdout and any error.
 
 ```go
-out, _ := execx.Command("go", "env", "GOOS").OutputTrimmed()
-fmt.Println(out != "")
-// #bool true
+out, _ := execx.Command("printf", "hello\n").OutputTrimmed()
+fmt.Println(out)
+// #string hello
 ```
 
 ### <a id="run"></a>Run
@@ -800,7 +804,7 @@ fmt.Println(err == nil)
 // flag provided but not defined: -badflag
 // usage: go env [-json] [-changed] [-u] [-w] [var ...]
 // Run 'go help env' for details.
-// true
+// false
 ```
 
 ### <a id="stdoutwriter"></a>StdoutWriter
@@ -809,11 +813,11 @@ StdoutWriter sets a raw writer for stdout.
 
 ```go
 var out strings.Builder
-_, err := execx.Command("go", "env", "GOOS").
+_, _ = execx.Command("printf", "hello").
 	StdoutWriter(&out).
 	Run()
-fmt.Println(err == nil && out.Len() > 0)
-// #bool true
+fmt.Print(out.String())
+// hello
 ```
 
 ## WorkingDir

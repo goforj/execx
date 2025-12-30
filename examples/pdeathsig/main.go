@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	// Pdeathsig sets a parent-death signal on Linux.
+	// Pdeathsig is a no-op on non-Linux Unix platforms.
 
 	// Example: pdeathsig
 	fmt.Println(execx.Command("go", "env", "GOOS").Pdeathsig(0) != nil)

@@ -12,8 +12,8 @@ func main() {
 	// Command constructs a new command without executing it.
 
 	// Example: command
-	cmd := execx.Command("go", "env", "GOOS")
+	cmd := execx.Command("printf", "hello")
 	out, _ := cmd.Output()
-	fmt.Println(out != "")
-	// #bool true
+	fmt.Print(out)
+	// hello
 }
