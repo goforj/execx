@@ -9,15 +9,10 @@ import (
 )
 
 func main() {
-	// Setpgid sets the process group ID behavior.
+	// Setpgid is a no-op on Windows; on Unix it places the child in a new process group.
 
 	// Example: setpgid
-	fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
-	// #bool true
-	// Example: setpgid
-	fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
-	// #bool true
-	// Example: setpgid
-	fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
-	// #bool true
+	out, _ := execx.Command("printf", "ok").Setpgid(true).Output()
+	fmt.Print(out)
+	// ok
 }

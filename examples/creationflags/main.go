@@ -9,12 +9,10 @@ import (
 )
 
 func main() {
-	// CreationFlags sets Windows creation flags.
+	// CreationFlags sets Windows process creation flags (for example, create a new process group).
 
 	// Example: creation flags
-	fmt.Println(execx.Command("go", "env", "GOOS").CreationFlags(0) != nil)
-	// #bool true
-	// Example: creation flags
-	fmt.Println(execx.Command("go", "env", "GOOS").CreationFlags(0) != nil)
-	// #bool true
+	out, _ := execx.Command("printf", "ok").CreationFlags(0x00000200).Output()
+	fmt.Print(out)
+	// ok
 }

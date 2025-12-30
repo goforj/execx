@@ -9,15 +9,10 @@ import (
 )
 
 func main() {
-	// Setsid sets the session ID behavior.
+	// Setsid is a no-op on Windows; on Unix it starts a new session.
 
 	// Example: setsid
-	fmt.Println(execx.Command("go", "env", "GOOS").Setsid(true) != nil)
-	// #bool true
-	// Example: setsid
-	fmt.Println(execx.Command("go", "env", "GOOS").Setsid(true) != nil)
-	// #bool true
-	// Example: setsid
-	fmt.Println(execx.Command("go", "env", "GOOS").Setsid(true) != nil)
-	// #bool true
+	out, _ := execx.Command("printf", "ok").Setsid(true).Output()
+	fmt.Print(out)
+	// ok
 }

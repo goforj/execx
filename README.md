@@ -492,115 +492,56 @@ fmt.Println(out)
 
 ## OS Controls
 
+OS controls map to `syscall.SysProcAttr` for process/session configuration. Use them when you need process groups, detached sessions, or OS-specific process creation flags. On unsupported platforms they are no-ops.
+
 ### <a id="creationflags"></a>CreationFlags
 
-CreationFlags sets Windows creation flags.
-
-_Example: creation flags_
+CreationFlags sets Windows process creation flags (for example, create a new process group). It is a no-op on non-Windows platforms.
 
 ```go
-fmt.Println(execx.Command("go", "env", "GOOS").CreationFlags(0) != nil)
-// #bool true
-```
-
-_Example: creation flags_
-
-```go
-fmt.Println(execx.Command("go", "env", "GOOS").CreationFlags(0) != nil)
-// #bool true
+out, _ := execx.Command("printf", "ok").CreationFlags(0x00000200).Output()
+fmt.Print(out)
+// ok
 ```
 
 ### <a id="hidewindow"></a>HideWindow
 
-HideWindow controls window visibility and sets CREATE_NO_WINDOW for console apps.
-
-_Example: hide window_
+HideWindow hides console windows on Windows (it sets `SysProcAttr.HideWindow` and `CREATE_NO_WINDOW`). It is a no-op on non-Windows platforms.
 
 ```go
-fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)
-// #bool true
-```
-
-_Example: hide window_
-
-```go
-fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)
-// #bool true
+out, _ := execx.Command("printf", "ok").HideWindow(true).Output()
+fmt.Print(out)
+// ok
 ```
 
 ### <a id="pdeathsig"></a>Pdeathsig
 
-Pdeathsig is a no-op on Windows.
-
-_Example: pdeathsig_
+Pdeathsig sets a parent-death signal on Linux so the child receives a signal if the parent exits. It is a no-op on non-Linux platforms.
 
 ```go
-fmt.Println(execx.Command("go", "env", "GOOS").Pdeathsig(0) != nil)
-// #bool true
-```
-
-_Example: pdeathsig_
-
-```go
-fmt.Println(execx.Command("go", "env", "GOOS").Pdeathsig(0) != nil)
-// #bool true
-```
-
-_Example: pdeathsig_
-
-```go
-fmt.Println(execx.Command("go", "env", "GOOS").Pdeathsig(0) != nil)
-// #bool true
+out, _ := execx.Command("printf", "ok").Pdeathsig(syscall.SIGTERM).Output()
+fmt.Print(out)
+// ok
 ```
 
 ### <a id="setpgid"></a>Setpgid
 
-Setpgid is a no-op on Windows.
-
-_Example: setpgid_
+Setpgid places the child in a new process group. Use this when you want to signal or terminate a group independently of the parent.
 
 ```go
-fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
-// #bool true
-```
-
-_Example: setpgid_
-
-```go
-fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
-// #bool true
-```
-
-_Example: setpgid_
-
-```go
-fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
-// #bool true
+out, _ := execx.Command("printf", "ok").Setpgid(true).Output()
+fmt.Print(out)
+// ok
 ```
 
 ### <a id="setsid"></a>Setsid
 
-Setsid is a no-op on Windows.
-
-_Example: setsid_
+Setsid starts the child in a new session, detaching it from the controlling terminal.
 
 ```go
-fmt.Println(execx.Command("go", "env", "GOOS").Setsid(true) != nil)
-// #bool true
-```
-
-_Example: setsid_
-
-```go
-fmt.Println(execx.Command("go", "env", "GOOS").Setsid(true) != nil)
-// #bool true
-```
-
-_Example: setsid_
-
-```go
-fmt.Println(execx.Command("go", "env", "GOOS").Setsid(true) != nil)
-// #bool true
+out, _ := execx.Command("printf", "ok").Setsid(true).Output()
+fmt.Print(out)
+// ok
 ```
 
 ## Pipelining
