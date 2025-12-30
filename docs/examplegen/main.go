@@ -394,6 +394,9 @@ func writeMain(base string, fd *FuncDoc, importPath string) error {
 		if strings.Contains(ex.Code, "regexp.") {
 			imports["regexp"] = true
 		}
+		if strings.Contains(ex.Code, "syscall.") {
+			imports["syscall"] = true
+		}
 		if strings.Contains(ex.Code, "redis.") {
 			imports["github.com/redis/go-redis/v9"] = true
 		}

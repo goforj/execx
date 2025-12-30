@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/github/v/tag/goforj/execx?label=version&sort=semver" alt="Latest tag"> 
     <a href="https://codecov.io/gh/goforj/execx" ><img src="https://codecov.io/github/goforj/execx/graph/badge.svg?token=RBB8T6WQ0U"/></a>
 <!-- test-count:embed:start -->
-    <img src="https://img.shields.io/badge/tests-100-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-114-brightgreen" alt="Tests">
 <!-- test-count:embed:end -->
     <a href="https://goreportcard.com/report/github.com/goforj/execx"><img src="https://goreportcard.com/badge/github.com/goforj/execx" alt="Go Report Card"></a>
 </p>
@@ -203,8 +203,8 @@ All public APIs are covered by runnable examples under `./examples`, and the tes
 | **Process** | [GracefulShutdown](#gracefulshutdown) [Interrupt](#interrupt) [KillAfter](#killafter) [Send](#send) [Terminate](#terminate) [Wait](#wait) |
 | **Results** | [IsExitCode](#isexitcode) [IsSignal](#issignal) [OK](#ok) |
 | **Streaming** | [OnStderr](#onstderr) [OnStdout](#onstdout) [StderrWriter](#stderrwriter) [StdoutWriter](#stdoutwriter) |
+| **User Feedback** | [ShadowPrint](#shadowprint) [ShadowPrintFormatter](#shadowprintformatter) [ShadowPrintMask](#shadowprintmask) [ShadowPrintOff](#shadowprintoff) [ShadowPrintPrefix](#shadowprintprefix) |
 | **WorkingDir** | [Dir](#dir) |
-| **User Feedback** | [ShadowPrint](#shadowprint) [ShadowPrintOff](#shadowprintoff) [ShadowPrintPrefix](#shadowprintprefix) [ShadowPrintMask](#shadowprintmask) [ShadowPrintFormatter](#shadowprintformatter) |
 
 
 ## Arguments
@@ -287,62 +287,6 @@ ShellEscaped returns a shell-escaped string for logging only.
 cmd := execx.Command("echo", "hello world", "it's")
 fmt.Println(cmd.ShellEscaped())
 // #string echo 'hello world' 'it'\\''s'
-```
-
-## User Feedback
-
-### <a id="shadowprint"></a>ShadowPrint
-
-ShadowPrint writes the shell-escaped command to stderr before and after execution.
-
-```go
-_, _ = execx.Command("printf", "hi").ShadowPrint().Run()
-// execx > printf hi
-// execx > printf hi (1ms)
-```
-
-### <a id="shadowprintoff"></a>ShadowPrintOff
-
-ShadowPrintOff disables shadow printing for this command chain.
-
-```go
-_, _ = execx.Command("printf", "hi").ShadowPrint().ShadowPrintOff().Run()
-```
-
-### <a id="shadowprintprefix"></a>ShadowPrintPrefix
-
-ShadowPrintPrefix sets the prefix used by ShadowPrint.
-
-```go
-_, _ = execx.Command("printf", "hi").ShadowPrintPrefix("run").Run()
-// run > printf hi
-// run > printf hi (1ms)
-```
-
-### <a id="shadowprintmask"></a>ShadowPrintMask
-
-ShadowPrintMask applies a masker to the shadow-printed command string.
-
-```go
-mask := func(cmd string) string {
-	return strings.ReplaceAll(cmd, "secret", "***")
-}
-_, _ = execx.Command("printf", "secret").ShadowPrintMask(mask).Run()
-// execx > printf ***
-// execx > printf *** (1ms)
-```
-
-### <a id="shadowprintformatter"></a>ShadowPrintFormatter
-
-ShadowPrintFormatter sets a formatter for ShadowPrint output.
-
-```go
-formatter := func(ev execx.ShadowEvent) string {
-	return fmt.Sprintf("shadow: %s %s", ev.Phase, ev.Command)
-}
-_, _ = execx.Command("printf", "hi").ShadowPrintFormatter(formatter).Run()
-// shadow: before printf hi
-// shadow: after printf hi
 ```
 
 ### <a id="string"></a>String
@@ -551,17 +495,9 @@ fmt.Println(out)
 
 ## OS Controls
 
-OS controls map to `syscall.SysProcAttr` for process/session configuration. Use them when you need process groups, detached sessions, or OS-specific process creation flags. On unsupported platforms they are no-ops.
-
 ### <a id="creationflags"></a>CreationFlags
 
-CreationFlags sets Windows process creation flags (for example, create a new process group). It is a no-op on non-Windows platforms.
-
-Common flags:
-
-- `execx.CreateNewProcessGroup`
-- `execx.CreateNewConsole`
-- `execx.CreateNoWindow`
+CreationFlags is a no-op on non-Windows platforms; on Windows it sets process creation flags.
 
 ```go
 out, _ := execx.Command("printf", "ok").CreationFlags(execx.CreateNewProcessGroup).Output()
@@ -571,7 +507,7 @@ fmt.Print(out)
 
 ### <a id="hidewindow"></a>HideWindow
 
-HideWindow hides console windows on Windows (it sets `SysProcAttr.HideWindow` and `CREATE_NO_WINDOW`). It is a no-op on non-Windows platforms.
+HideWindow is a no-op on non-Windows platforms; on Windows it hides console windows.
 
 ```go
 out, _ := execx.Command("printf", "ok").HideWindow(true).Output()
@@ -581,7 +517,7 @@ fmt.Print(out)
 
 ### <a id="pdeathsig"></a>Pdeathsig
 
-Pdeathsig sets a parent-death signal on Linux so the child receives a signal if the parent exits. It is a no-op on non-Linux platforms.
+Pdeathsig sets a parent-death signal on Linux so the child is signaled if the parent exits.
 
 ```go
 out, _ := execx.Command("printf", "ok").Pdeathsig(syscall.SIGTERM).Output()
@@ -591,7 +527,7 @@ fmt.Print(out)
 
 ### <a id="setpgid"></a>Setpgid
 
-Setpgid places the child in a new process group. Use this when you want to signal or terminate a group independently of the parent.
+Setpgid places the child in a new process group for group signals.
 
 ```go
 out, _ := execx.Command("printf", "ok").Setpgid(true).Output()
@@ -601,7 +537,7 @@ fmt.Print(out)
 
 ### <a id="setsid"></a>Setsid
 
-Setsid starts the child in a new session, detaching it from the controlling terminal.
+Setsid starts the child in a new session, detaching it from the terminal.
 
 ```go
 out, _ := execx.Command("printf", "ok").Setsid(true).Output()
@@ -828,6 +764,62 @@ _, _ = execx.Command("printf", "hello").
 	Run()
 fmt.Print(out.String())
 // hello
+```
+
+## User Feedback
+
+### <a id="shadowprint"></a>ShadowPrint
+
+ShadowPrint writes the shell-escaped command to stderr before and after execution.
+
+```go
+_, _ = execx.Command("printf", "hi").ShadowPrint().Run()
+// execx > printf hi
+// execx > printf hi (1ms)
+```
+
+### <a id="shadowprintformatter"></a>ShadowPrintFormatter
+
+ShadowPrintFormatter sets a formatter for ShadowPrint output.
+
+```go
+formatter := func(ev execx.ShadowEvent) string {
+	return fmt.Sprintf("shadow: %s %s", ev.Phase, ev.Command)
+}
+_, _ = execx.Command("printf", "hi").ShadowPrintFormatter(formatter).Run()
+// shadow: before printf hi
+// shadow: after printf hi
+```
+
+### <a id="shadowprintmask"></a>ShadowPrintMask
+
+ShadowPrintMask sets a command masker for ShadowPrint output.
+
+```go
+mask := func(cmd string) string {
+	return strings.ReplaceAll(cmd, "secret", "***")
+}
+_, _ = execx.Command("printf", "secret").ShadowPrintMask(mask).Run()
+// execx > printf ***
+// execx > printf *** (1ms)
+```
+
+### <a id="shadowprintoff"></a>ShadowPrintOff
+
+ShadowPrintOff disables shadow printing for this command chain.
+
+```go
+_, _ = execx.Command("printf", "hi").ShadowPrint().ShadowPrintOff().Run()
+```
+
+### <a id="shadowprintprefix"></a>ShadowPrintPrefix
+
+ShadowPrintPrefix sets the prefix used by ShadowPrint.
+
+```go
+_, _ = execx.Command("printf", "hi").ShadowPrintPrefix("run").Run()
+// run > printf hi
+// run > printf hi (1ms)
 ```
 
 ## WorkingDir
