@@ -12,8 +12,7 @@ func main() {
 	// Interrupt sends an interrupt signal to the process.
 
 	// Example: interrupt
-	proc := execx.Command("sleep", "2").
-		Start()
+	proc := execx.Command("sleep", "2").Start()
 	_ = proc.Interrupt()
 	res, err := proc.Wait()
 	fmt.Println(err != nil || res.ExitCode != 0)

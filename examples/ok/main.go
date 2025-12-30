@@ -12,7 +12,7 @@ func main() {
 	// OK reports whether the command exited cleanly without errors.
 
 	// Example: ok
-	res, err := execx.Command("go", "env", "GOOS").Run()
-	fmt.Println(err == nil && res.OK())
+	res, _ := execx.Command("go", "env", "GOOS").Run()
+	fmt.Println(res.OK())
 	// #bool true
 }

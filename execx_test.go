@@ -747,9 +747,9 @@ func TestErrExecMethods(t *testing.T) {
 func TestSysProcAttrNoops(t *testing.T) {
 	cmd := Command("echo")
 	cmd.CreationFlags(123).HideWindow(true).Pdeathsig(syscall.SIGTERM)
-	if runtime.GOOS == "linux" {
+	if runtime.GOOS == "linux" || runtime.GOOS == "windows" {
 		if cmd.sysProcAttr == nil {
-			t.Fatalf("expected sys proc attr on linux")
+			t.Fatalf("expected sys proc attr on supported platform")
 		}
 		return
 	}

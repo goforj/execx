@@ -50,7 +50,7 @@ func (c *Cmd) CreationFlags(flags uint32) *Cmd {
 	return c
 }
 
-// HideWindow controls window visibility.
+// HideWindow controls window visibility and sets CREATE_NO_WINDOW for console apps.
 // @group OS Controls
 //
 // Example: hide window
@@ -60,6 +60,9 @@ func (c *Cmd) CreationFlags(flags uint32) *Cmd {
 func (c *Cmd) HideWindow(on bool) *Cmd {
 	c.ensureSysProcAttr()
 	c.sysProcAttr.HideWindow = on
+	if on {
+		c.sysProcAttr.CreationFlags |= syscall.CREATE_NO_WINDOW
+	}
 	return c
 }
 

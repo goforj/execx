@@ -338,12 +338,10 @@ func (c *Cmd) StdinFile(file *os.File) *Cmd {
 //
 // Example: stdout lines
 //
-//	var lines []string
-//	_, err := execx.Command("go", "env", "GOOS").
-//		OnStdout(func(line string) { lines = append(lines, line) }).
+//	_, _ = execx.Command("go", "env", "GOOS").
+//		OnStdout(func(line string) { fmt.Println(line) }).
 //		Run()
-//	fmt.Println(err == nil && len(lines) > 0)
-//	// #bool true
+//	// darwin
 func (c *Cmd) OnStdout(fn func(string)) *Cmd {
 	c.onStdout = fn
 	return c
@@ -356,10 +354,16 @@ func (c *Cmd) OnStdout(fn func(string)) *Cmd {
 //
 //	var lines []string
 //	_, err := execx.Command("go", "env", "-badflag").
-//		OnStderr(func(line string) { lines = append(lines, line) }).
+//		OnStderr(func(line string) {
+//			lines = append(lines, line)
+//			fmt.Println(line)
+//		}).
 //		Run()
-//	fmt.Println(err == nil && len(lines) == 1)
-//	// #bool true
+//	fmt.Println(err == nil)
+//	// flag provided but not defined: -badflag
+//	// usage: go env [-json] [-changed] [-u] [-w] [var ...]
+//	// Run 'go help env' for details.
+//	// false
 func (c *Cmd) OnStderr(fn func(string)) *Cmd {
 	c.onStderr = fn
 	return c
@@ -390,8 +394,12 @@ func (c *Cmd) StdoutWriter(w io.Writer) *Cmd {
 //	_, err := execx.Command("go", "env", "-badflag").
 //		StderrWriter(&out).
 //		Run()
-//	fmt.Println(err == nil && out.Len() > 0)
-//	// #bool true
+//	fmt.Print(out.String())
+//	fmt.Println(err == nil)
+//	// flag provided but not defined: -badflag
+//	// usage: go env [-json] [-changed] [-u] [-w] [var ...]
+//	// Run 'go help env' for details.
+//	// false
 func (c *Cmd) StderrWriter(w io.Writer) *Cmd {
 	c.stderrW = w
 	return c
@@ -781,8 +789,8 @@ type Process struct {
 // Example: wait
 //
 //	proc := execx.Command("go", "env", "GOOS").Start()
-//	res, err := proc.Wait()
-//	fmt.Println(err == nil && res.ExitCode == 0)
+//	res, _ := proc.Wait()
+//	fmt.Println(res.ExitCode == 0)
 //	// #bool true
 func (p *Process) Wait() (Result, error) {
 	<-p.done
@@ -794,8 +802,7 @@ func (p *Process) Wait() (Result, error) {
 //
 // Example: kill after
 //
-//	proc := execx.Command("sleep", "2").
-//		Start()
+//	proc := execx.Command("sleep", "2").Start()
 //	proc.KillAfter(100 * time.Millisecond)
 //	res, err := proc.Wait()
 //	fmt.Println(err != nil || res.ExitCode != 0)
@@ -816,8 +823,7 @@ func (p *Process) KillAfter(d time.Duration) {
 //
 // Example: send signal
 //
-//	proc := execx.Command("sleep", "2").
-//		Start()
+//	proc := execx.Command("sleep", "2").Start()
 //	_ = proc.Send(os.Interrupt)
 //	res, err := proc.Wait()
 //	fmt.Println(err != nil || res.ExitCode != 0)
@@ -833,8 +839,7 @@ func (p *Process) Send(sig os.Signal) error {
 //
 // Example: interrupt
 //
-//	proc := execx.Command("sleep", "2").
-//		Start()
+//	proc := execx.Command("sleep", "2").Start()
 //	_ = proc.Interrupt()
 //	res, err := proc.Wait()
 //	fmt.Println(err != nil || res.ExitCode != 0)
@@ -848,8 +853,7 @@ func (p *Process) Interrupt() error {
 //
 // Example: terminate
 //
-//	proc := execx.Command("sleep", "2").
-//		Start()
+//	proc := execx.Command("sleep", "2").Start()
 //	_ = proc.Terminate()
 //	res, err := proc.Wait()
 //	fmt.Println(err != nil || res.ExitCode != 0)
@@ -865,8 +869,7 @@ func (p *Process) Terminate() error {
 //
 // Example: graceful shutdown
 //
-//	proc := execx.Command("sleep", "2").
-//		Start()
+//	proc := execx.Command("sleep", "2").Start()
 //	_ = proc.GracefulShutdown(os.Interrupt, 100*time.Millisecond)
 //	res, err := proc.Wait()
 //	fmt.Println(err != nil || res.ExitCode != 0)

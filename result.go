@@ -21,8 +21,8 @@ type Result struct {
 //
 // Example: ok
 //
-//	res, err := execx.Command("go", "env", "GOOS").Run()
-//	fmt.Println(err == nil && res.OK())
+//	res, _ := execx.Command("go", "env", "GOOS").Run()
+//	fmt.Println(res.OK())
 //	// #bool true
 func (r Result) OK() bool {
 	return r.Err == nil && r.ExitCode == 0
@@ -33,8 +33,8 @@ func (r Result) OK() bool {
 //
 // Example: exit code
 //
-//	res, err := execx.Command("go", "env", "GOOS").Run()
-//	fmt.Println(err == nil && res.IsExitCode(0))
+//	res, _ := execx.Command("go", "env", "GOOS").Run()
+//	fmt.Println(res.IsExitCode(0))
 //	// #bool true
 func (r Result) IsExitCode(code int) bool {
 	return r.ExitCode == code
@@ -45,9 +45,9 @@ func (r Result) IsExitCode(code int) bool {
 //
 // Example: signal
 //
-//	res, err := execx.Command("go", "env", "GOOS").Run()
-//	fmt.Println(err == nil && res.IsSignal(os.Interrupt))
-//	// #bool false
+//	res, _ := execx.Command("go", "env", "GOOS").Run()
+//	fmt.Println(res.IsSignal(os.Interrupt))
+//	// false
 func (r Result) IsSignal(sig os.Signal) bool {
 	return r.signal == sig
 }

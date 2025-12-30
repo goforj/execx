@@ -566,7 +566,7 @@ fmt.Println(out)
 
 ### <a id="creationflags"></a>CreationFlags
 
-CreationFlags is a no-op on non-Windows platforms.
+CreationFlags sets Windows creation flags.
 
 _Example: creation flags_
 
@@ -584,7 +584,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").CreationFlags(0) != nil)
 
 ### <a id="hidewindow"></a>HideWindow
 
-HideWindow is a no-op on non-Windows platforms.
+HideWindow controls window visibility and sets CREATE_NO_WINDOW for console apps.
 
 _Example: hide window_
 
@@ -602,7 +602,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)
 
 ### <a id="pdeathsig"></a>Pdeathsig
 
-Pdeathsig is a no-op on non-Linux Unix platforms.
+Pdeathsig is a no-op on Windows.
 
 _Example: pdeathsig_
 
@@ -627,7 +627,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").Pdeathsig(0) != nil)
 
 ### <a id="setpgid"></a>Setpgid
 
-Setpgid sets the process group ID behavior.
+Setpgid is a no-op on Windows.
 
 _Example: setpgid_
 
@@ -652,7 +652,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
 
 ### <a id="setsid"></a>Setsid
 
-Setsid sets the session ID behavior.
+Setsid is a no-op on Windows.
 
 _Example: setsid_
 
@@ -734,8 +734,7 @@ fmt.Println(err == nil && len(results) == 2)
 GracefulShutdown sends a signal and escalates to kill after the timeout.
 
 ```go
-proc := execx.Command("sleep", "2").
-	Start()
+proc := execx.Command("sleep", "2").Start()
 _ = proc.GracefulShutdown(os.Interrupt, 100*time.Millisecond)
 res, err := proc.Wait()
 fmt.Println(err != nil || res.ExitCode != 0)
@@ -747,8 +746,7 @@ fmt.Println(err != nil || res.ExitCode != 0)
 Interrupt sends an interrupt signal to the process.
 
 ```go
-proc := execx.Command("sleep", "2").
-	Start()
+proc := execx.Command("sleep", "2").Start()
 _ = proc.Interrupt()
 res, err := proc.Wait()
 fmt.Println(err != nil || res.ExitCode != 0)
@@ -760,8 +758,7 @@ fmt.Println(err != nil || res.ExitCode != 0)
 KillAfter terminates the process after the given duration.
 
 ```go
-proc := execx.Command("sleep", "2").
-	Start()
+proc := execx.Command("sleep", "2").Start()
 proc.KillAfter(100 * time.Millisecond)
 res, err := proc.Wait()
 fmt.Println(err != nil || res.ExitCode != 0)
@@ -773,8 +770,7 @@ fmt.Println(err != nil || res.ExitCode != 0)
 Send sends a signal to the process.
 
 ```go
-proc := execx.Command("sleep", "2").
-	Start()
+proc := execx.Command("sleep", "2").Start()
 _ = proc.Send(os.Interrupt)
 res, err := proc.Wait()
 fmt.Println(err != nil || res.ExitCode != 0)
@@ -786,8 +782,7 @@ fmt.Println(err != nil || res.ExitCode != 0)
 Terminate kills the process immediately.
 
 ```go
-proc := execx.Command("sleep", "2").
-	Start()
+proc := execx.Command("sleep", "2").Start()
 _ = proc.Terminate()
 res, err := proc.Wait()
 fmt.Println(err != nil || res.ExitCode != 0)
@@ -800,8 +795,8 @@ Wait waits for the command to complete and returns the result and any error.
 
 ```go
 proc := execx.Command("go", "env", "GOOS").Start()
-res, err := proc.Wait()
-fmt.Println(err == nil && res.ExitCode == 0)
+res, _ := proc.Wait()
+fmt.Println(res.ExitCode == 0)
 // #bool true
 ```
 
@@ -812,8 +807,8 @@ fmt.Println(err == nil && res.ExitCode == 0)
 IsExitCode reports whether the exit code matches.
 
 ```go
-res, err := execx.Command("go", "env", "GOOS").Run()
-fmt.Println(err == nil && res.IsExitCode(0))
+res, _ := execx.Command("go", "env", "GOOS").Run()
+fmt.Println(res.IsExitCode(0))
 // #bool true
 ```
 
@@ -822,9 +817,9 @@ fmt.Println(err == nil && res.IsExitCode(0))
 IsSignal reports whether the command terminated due to a signal.
 
 ```go
-res, err := execx.Command("go", "env", "GOOS").Run()
-fmt.Println(err == nil && res.IsSignal(os.Interrupt))
-// #bool false
+res, _ := execx.Command("go", "env", "GOOS").Run()
+fmt.Println(res.IsSignal(os.Interrupt))
+// false
 ```
 
 ### <a id="ok"></a>OK
@@ -832,8 +827,8 @@ fmt.Println(err == nil && res.IsSignal(os.Interrupt))
 OK reports whether the command exited cleanly without errors.
 
 ```go
-res, err := execx.Command("go", "env", "GOOS").Run()
-fmt.Println(err == nil && res.OK())
+res, _ := execx.Command("go", "env", "GOOS").Run()
+fmt.Println(res.OK())
 // #bool true
 ```
 
@@ -846,10 +841,16 @@ OnStderr registers a line callback for stderr.
 ```go
 var lines []string
 _, err := execx.Command("go", "env", "-badflag").
-	OnStderr(func(line string) { lines = append(lines, line) }).
+	OnStderr(func(line string) {
+		lines = append(lines, line)
+		fmt.Println(line)
+	}).
 	Run()
-fmt.Println(err == nil && len(lines) == 1)
-// #bool true
+fmt.Println(err == nil)
+// flag provided but not defined: -badflag
+// usage: go env [-json] [-changed] [-u] [-w] [var ...]
+// Run 'go help env' for details.
+// false
 ```
 
 ### <a id="onstdout"></a>OnStdout
@@ -857,12 +858,10 @@ fmt.Println(err == nil && len(lines) == 1)
 OnStdout registers a line callback for stdout.
 
 ```go
-var lines []string
-_, err := execx.Command("go", "env", "GOOS").
-	OnStdout(func(line string) { lines = append(lines, line) }).
+_, _ = execx.Command("go", "env", "GOOS").
+	OnStdout(func(line string) { fmt.Println(line) }).
 	Run()
-fmt.Println(err == nil && len(lines) > 0)
-// #bool true
+// darwin
 ```
 
 ### <a id="stderrwriter"></a>StderrWriter
@@ -874,8 +873,12 @@ var out strings.Builder
 _, err := execx.Command("go", "env", "-badflag").
 	StderrWriter(&out).
 	Run()
-fmt.Println(err == nil && out.Len() > 0)
-// #bool true
+fmt.Print(out.String())
+fmt.Println(err == nil)
+// flag provided but not defined: -badflag
+// usage: go env [-json] [-changed] [-u] [-w] [var ...]
+// Run 'go help env' for details.
+// false
 ```
 
 ### <a id="stdoutwriter"></a>StdoutWriter
