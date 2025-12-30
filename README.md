@@ -631,7 +631,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)
 
 ### <a id="pdeathsig"></a>Pdeathsig
 
-Pdeathsig is a no-op on non-Linux Unix platforms.
+Pdeathsig is a no-op on Windows.
 
 _Example: pdeathsig_
 
@@ -656,7 +656,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").Pdeathsig(0) != nil)
 
 ### <a id="setpgid"></a>Setpgid
 
-Setpgid sets the process group ID behavior.
+Setpgid is a no-op on Windows.
 
 _Example: setpgid_
 
@@ -681,7 +681,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
 
 ### <a id="setsid"></a>Setsid
 
-Setsid sets the session ID behavior.
+Setsid is a no-op on Windows.
 
 _Example: setsid_
 
