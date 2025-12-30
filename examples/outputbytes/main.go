@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	// OutputBytes executes the command and returns stdout bytes.
+	// OutputBytes executes the command and returns stdout bytes and any error.
 
 	// Example: output bytes
 	out, _ := execx.Command("go", "env", "GOOS").OutputBytes()

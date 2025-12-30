@@ -13,7 +13,7 @@ func main() {
 
 	// Example: start
 	proc := execx.Command("go", "env", "GOOS").Start()
-	res := proc.Wait()
-	fmt.Println(res.ExitCode == 0)
+	res, err := proc.Wait()
+	fmt.Println(err == nil && res.ExitCode == 0)
 	// #bool true
 }

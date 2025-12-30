@@ -9,12 +9,12 @@ import (
 )
 
 func main() {
-	// PipelineResults executes the command and returns per-stage results.
+	// PipelineResults executes the command and returns per-stage results and any error.
 
 	// Example: pipeline results
-	results := execx.Command("printf", "go").
+	results, err := execx.Command("printf", "go").
 		Pipe("tr", "a-z", "A-Z").
 		PipelineResults()
-	fmt.Println(len(results))
-	// #int 2
+	fmt.Println(err == nil && len(results) == 2)
+	// #bool true
 }

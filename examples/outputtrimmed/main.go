@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	// OutputTrimmed executes the command and returns trimmed stdout.
+	// OutputTrimmed executes the command and returns trimmed stdout and any error.
 
 	// Example: output trimmed
 	out, _ := execx.Command("go", "env", "GOOS").OutputTrimmed()

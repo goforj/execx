@@ -12,7 +12,7 @@ func main() {
 	// IsExitCode reports whether the exit code matches.
 
 	// Example: exit code
-	res := execx.Command("go", "env", "GOOS").Run()
-	fmt.Println(res.IsExitCode(0))
+	res, err := execx.Command("go", "env", "GOOS").Run()
+	fmt.Println(err == nil && res.IsExitCode(0))
 	// #bool true
 }

@@ -9,11 +9,11 @@ import (
 )
 
 func main() {
-	// Wait waits for the command to complete and returns the result.
+	// Wait waits for the command to complete and returns the result and any error.
 
 	// Example: wait
 	proc := execx.Command("go", "env", "GOOS").Start()
-	res := proc.Wait()
-	fmt.Println(res.ExitCode == 0)
+	res, err := proc.Wait()
+	fmt.Println(err == nil && res.ExitCode == 0)
 	// #bool true
 }

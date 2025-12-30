@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	// Output executes the command and returns stdout.
+	// Output executes the command and returns stdout and any error.
 
 	// Example: output
 	out, _ := execx.Command("go", "env", "GOOS").Output()

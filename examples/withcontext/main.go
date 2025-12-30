@@ -16,7 +16,7 @@ func main() {
 	// Example: with context
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	res := execx.Command("go", "env", "GOOS").WithContext(ctx).Run()
-	fmt.Println(res.Err == nil)
+	res, err := execx.Command("go", "env", "GOOS").WithContext(ctx).Run()
+	fmt.Println(err == nil && res.ExitCode == 0)
 	// #bool true
 }

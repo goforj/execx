@@ -12,10 +12,10 @@ func main() {
 	// PipeBestEffort sets best-effort pipeline semantics.
 
 	// Example: best effort
-	res := execx.Command("false").
+	res, err := execx.Command("false").
 		Pipe("printf", "ok").
 		PipeBestEffort().
 		Run()
-	fmt.Println(res.Stdout)
-	// #string ok
+	fmt.Println(err == nil && res.Stdout == "ok")
+	// #bool true
 }

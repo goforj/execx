@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	// CombinedOutput executes the command and returns stdout+stderr.
+	// CombinedOutput executes the command and returns stdout+stderr and any error.
 
 	// Example: combined output
 	out, _ := execx.Command("go", "env", "GOOS").CombinedOutput()

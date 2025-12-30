@@ -14,9 +14,9 @@ func main() {
 
 	// Example: stderr writer
 	var out strings.Builder
-	execx.Command("go", "env", "-badflag").
+	_, err := execx.Command("go", "env", "-badflag").
 		StderrWriter(&out).
 		Run()
-	fmt.Println(out.Len() > 0)
+	fmt.Println(err == nil && out.Len() > 0)
 	// #bool true
 }

@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	// HideWindow is a no-op on non-Windows platforms.
+	// HideWindow controls window visibility.
 
 	// Example: hide window
 	fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)

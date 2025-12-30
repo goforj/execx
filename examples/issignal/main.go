@@ -13,7 +13,7 @@ func main() {
 	// IsSignal reports whether the command terminated due to a signal.
 
 	// Example: signal
-	res := execx.Command("go", "env", "GOOS").Run()
-	fmt.Println(res.IsSignal(os.Interrupt))
+	res, err := execx.Command("go", "env", "GOOS").Run()
+	fmt.Println(err == nil && res.IsSignal(os.Interrupt))
 	// #bool false
 }

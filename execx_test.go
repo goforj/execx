@@ -260,7 +260,10 @@ func TestOutputVariants(t *testing.T) {
 }
 
 func TestExitHelpers(t *testing.T) {
-	res := helperCommand("exit", "2").Run()
+	res, err := helperCommand("exit", "2").Run()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 	if res.OK() {
 		t.Fatalf("expected not OK")
 	}
@@ -276,50 +279,53 @@ func TestIsSignal(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("signals not supported on windows")
 	}
-	res := helperCommand("signal").Run()
+	res, err := helperCommand("signal").Run()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 	if !res.IsSignal(syscall.SIGTERM) {
 		t.Fatalf("expected SIGTERM, got %v", res.signal)
 	}
 }
 
 func TestWithTimeout(t *testing.T) {
-	res := helperCommand("sleep", "200").WithTimeout(50 * time.Millisecond).Run()
-	if res.Err == nil {
+	_, err := helperCommand("sleep", "200").WithTimeout(50 * time.Millisecond).Run()
+	if err == nil {
 		t.Fatalf("expected timeout error")
 	}
-	if !errorsIsContext(res.Err) {
-		t.Fatalf("expected context error, got %v", res.Err)
+	if !errorsIsContext(err) {
+		t.Fatalf("expected context error, got %v", err)
 	}
 
-	res = helperCommand("sleep", "50").WithTimeout(10 * time.Millisecond).WithTimeout(5 * time.Millisecond).Run()
-	if res.Err == nil {
+	_, err = helperCommand("sleep", "50").WithTimeout(10 * time.Millisecond).WithTimeout(5 * time.Millisecond).Run()
+	if err == nil {
 		t.Fatalf("expected timeout error on repeated call")
 	}
 }
 
 func TestWithDeadline(t *testing.T) {
-	res := helperCommand("sleep", "100").WithDeadline(time.Now().Add(10 * time.Millisecond)).Run()
-	if res.Err == nil {
+	_, err := helperCommand("sleep", "100").WithDeadline(time.Now().Add(10 * time.Millisecond)).Run()
+	if err == nil {
 		t.Fatalf("expected deadline error")
 	}
 
-	res = helperCommand("echo", "ok").WithDeadline(time.Now().Add(200 * time.Millisecond)).WithDeadline(time.Now().Add(300 * time.Millisecond)).Run()
-	if res.Err != nil {
-		t.Fatalf("expected no error, got %v", res.Err)
+	_, err = helperCommand("echo", "ok").WithDeadline(time.Now().Add(200 * time.Millisecond)).WithDeadline(time.Now().Add(300 * time.Millisecond)).Run()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
 	}
 }
 
 func TestWithContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	res := helperCommand("sleep", "50").WithContext(ctx).Run()
-	if res.Err == nil {
+	_, err := helperCommand("sleep", "50").WithContext(ctx).Run()
+	if err == nil {
 		t.Fatalf("expected canceled error")
 	}
 
-	res = helperCommand("echo", "ok").WithTimeout(500 * time.Millisecond).WithContext(context.Background()).Run()
-	if res.Err != nil {
-		t.Fatalf("expected no error, got %v", res.Err)
+	_, err = helperCommand("echo", "ok").WithTimeout(500 * time.Millisecond).WithContext(context.Background()).Run()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
 	}
 }
 
@@ -343,12 +349,18 @@ func TestDir(t *testing.T) {
 }
 
 func TestPipeModes(t *testing.T) {
-	strictRes := helperPipe(helperCommand("exit", "2"), "echo", "ok").Run()
+	strictRes, err := helperPipe(helperCommand("exit", "2"), "echo", "ok").Run()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 	if strictRes.ExitCode != 2 {
 		t.Fatalf("expected strict pipeline to return first failure, got %d", strictRes.ExitCode)
 	}
 
-	bestEffortRes := helperPipe(helperCommand("exit", "2").PipeBestEffort(), "echo", "ok").Run()
+	bestEffortRes, err := helperPipe(helperCommand("exit", "2").PipeBestEffort(), "echo", "ok").Run()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 	if bestEffortRes.ExitCode != 0 {
 		t.Fatalf("expected best effort to return last stage, got %d", bestEffortRes.ExitCode)
 	}
@@ -361,16 +373,19 @@ func TestPipeChain(t *testing.T) {
 	root := helperCommand("echo", "a")
 	stage := helperPipe(root, "echo", "b")
 	final := helperPipe(stage, "echo", "c")
-	res := final.Run()
+	res, err := final.Run()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 	if res.Stdout != "c" {
 		t.Fatalf("expected last stage output, got %q", res.Stdout)
 	}
 }
 
 func TestPipeBestEffortSetsError(t *testing.T) {
-	res := helperPipe(helperCommand("sleep", "50").WithTimeout(10*time.Millisecond).PipeBestEffort(), "echo", "ok").Run()
-	if res.Err == nil || !errorsIsContext(res.Err) {
-		t.Fatalf("expected context error, got %v", res.Err)
+	res, err := helperPipe(helperCommand("sleep", "50").WithTimeout(10*time.Millisecond).PipeBestEffort(), "echo", "ok").Run()
+	if err == nil || !errorsIsContext(err) {
+		t.Fatalf("expected context error, got %v", err)
 	}
 	if res.Stdout != "ok" {
 		t.Fatalf("expected stdout from last stage, got %q", res.Stdout)
@@ -380,13 +395,13 @@ func TestPipeBestEffortSetsError(t *testing.T) {
 func TestPipeStartError(t *testing.T) {
 	bad := Command("execx-does-not-exist")
 	stage := helperPipe(bad, "echo", "ok")
-	res := stage.Run()
-	if res.Err == nil {
+	res, err := stage.Run()
+	if err == nil {
 		t.Fatalf("expected start error")
 	}
 	var errExec ErrExec
-	if !errors.As(res.Err, &errExec) {
-		t.Fatalf("expected ErrExec, got %T", res.Err)
+	if !errors.As(err, &errExec) {
+		t.Fatalf("expected ErrExec, got %T", err)
 	}
 	if res.ExitCode != -1 {
 		t.Fatalf("expected exit code -1, got %d", res.ExitCode)
@@ -415,13 +430,13 @@ func TestStringAndShellEscaped(t *testing.T) {
 func TestLineCallbacks(t *testing.T) {
 	var stdoutLines []string
 	var stderrLines []string
-	res := helperCommand("lines").OnStdout(func(line string) {
+	_, err := helperCommand("lines").OnStdout(func(line string) {
 		stdoutLines = append(stdoutLines, line)
 	}).OnStderr(func(line string) {
 		stderrLines = append(stderrLines, line)
 	}).Run()
-	if res.Err != nil {
-		t.Fatalf("expected no error, got %v", res.Err)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
 	}
 	if strings.Join(stdoutLines, ",") != "a,b" {
 		t.Fatalf("unexpected stdout lines: %v", stdoutLines)
@@ -435,14 +450,14 @@ func TestWritersBeforeLineCallbacks(t *testing.T) {
 	var order []string
 	var stdoutLines []string
 	writer := &orderedWriter{order: &order, tag: "writer"}
-	res := helperCommand("lines").StdoutWriter(writer).OnStdout(func(line string) {
+	_, err := helperCommand("lines").StdoutWriter(writer).OnStdout(func(line string) {
 		if len(stdoutLines) == 0 {
 			order = append(order, "line")
 		}
 		stdoutLines = append(stdoutLines, line)
 	}).Run()
-	if res.Err != nil {
-		t.Fatalf("expected no error, got %v", res.Err)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
 	}
 	if len(order) == 0 || order[0] != "writer" {
 		t.Fatalf("expected writer before line callback, got %v", order)
@@ -455,11 +470,11 @@ func TestWritersBeforeLineCallbacks(t *testing.T) {
 func TestStderrWriter(t *testing.T) {
 	var stderrLines []string
 	writer := &orderedWriter{tag: "stderr"}
-	res := helperCommand("lines").StderrWriter(writer).OnStderr(func(line string) {
+	_, err := helperCommand("lines").StderrWriter(writer).OnStderr(func(line string) {
 		stderrLines = append(stderrLines, line)
 	}).Run()
-	if res.Err != nil {
-		t.Fatalf("expected no error, got %v", res.Err)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
 	}
 	if len(writer.buf) == 0 {
 		t.Fatalf("expected stderr writer to receive output")
@@ -471,20 +486,20 @@ func TestStderrWriter(t *testing.T) {
 
 func TestStartAndWait(t *testing.T) {
 	proc := helperCommand("sleep", "50").Start()
-	res := proc.Wait()
-	if res.ExitCode != 0 || res.Err != nil {
-		t.Fatalf("expected clean exit, got code=%d err=%v", res.ExitCode, res.Err)
+	res, err := proc.Wait()
+	if err != nil || res.ExitCode != 0 {
+		t.Fatalf("expected clean exit, got code=%d err=%v", res.ExitCode, err)
 	}
 }
 
 func TestStartError(t *testing.T) {
-	res := Command("execx-does-not-exist").Run()
-	if res.Err == nil {
+	res, err := Command("execx-does-not-exist").Run()
+	if err == nil {
 		t.Fatalf("expected start error")
 	}
 	var errExec ErrExec
-	if !errors.As(res.Err, &errExec) {
-		t.Fatalf("expected ErrExec, got %T", res.Err)
+	if !errors.As(err, &errExec) {
+		t.Fatalf("expected ErrExec, got %T", err)
 	}
 	if res.ExitCode != -1 {
 		t.Fatalf("expected exit code -1 for start error, got %d", res.ExitCode)
@@ -531,12 +546,32 @@ func TestPipelineResults(t *testing.T) {
 	root := helperCommand("echo", "a")
 	stage := helperPipe(root, "echo", "b")
 	final := helperPipe(stage, "echo", "c")
-	results := final.PipelineResults()
+	results, err := final.PipelineResults()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 	if len(results) != 3 {
 		t.Fatalf("expected 3 results, got %d", len(results))
 	}
 	if results[2].Stdout != "c" {
 		t.Fatalf("expected last stage stdout, got %q", results[2].Stdout)
+	}
+}
+
+func TestPipelineResultsError(t *testing.T) {
+	results, err := Command("execx-does-not-exist").PipelineResults()
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Err == nil {
+		t.Fatalf("expected result error")
+	}
+	var errExec ErrExec
+	if !errors.As(err, &errExec) {
+		t.Fatalf("expected ErrExec, got %T", err)
 	}
 }
 
@@ -548,7 +583,10 @@ func TestProcessSignals(t *testing.T) {
 	if err := proc.Send(syscall.SIGTERM); err != nil {
 		t.Fatalf("send signal: %v", err)
 	}
-	res := proc.Wait()
+	res, err := proc.Wait()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 	if !res.IsSignal(syscall.SIGTERM) {
 		t.Fatalf("expected SIGTERM, got %v", res.signal)
 	}
@@ -562,7 +600,10 @@ func TestProcessInterrupt(t *testing.T) {
 	if err := proc.Interrupt(); err != nil {
 		t.Fatalf("interrupt: %v", err)
 	}
-	res := proc.Wait()
+	res, err := proc.Wait()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 	if !res.IsSignal(os.Interrupt) {
 		t.Fatalf("expected interrupt, got %v", res.signal)
 	}
@@ -573,7 +614,10 @@ func TestProcessTerminate(t *testing.T) {
 	if err := proc.Terminate(); err != nil {
 		t.Fatalf("terminate: %v", err)
 	}
-	res := proc.Wait()
+	res, err := proc.Wait()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 	if res.ExitCode == 0 {
 		t.Fatalf("expected non-zero exit")
 	}
@@ -588,7 +632,10 @@ func TestGracefulShutdownKills(t *testing.T) {
 	if err := proc.GracefulShutdown(syscall.SIGTERM, 20*time.Millisecond); err != nil {
 		t.Fatalf("graceful shutdown: %v", err)
 	}
-	res := proc.Wait()
+	res, err := proc.Wait()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 	if !res.IsSignal(syscall.SIGKILL) {
 		t.Fatalf("expected SIGKILL, got %v", res.signal)
 	}
@@ -598,7 +645,10 @@ func TestKillAfter(t *testing.T) {
 	proc := helperCommand("sleep", "200").Start()
 	proc.KillAfter(10 * time.Millisecond)
 	proc.KillAfter(20 * time.Millisecond)
-	res := proc.Wait()
+	res, err := proc.Wait()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 	if res.ExitCode == 0 {
 		t.Fatalf("expected killed process")
 	}
@@ -612,7 +662,10 @@ func TestGracefulShutdownCompletes(t *testing.T) {
 	if err := proc.GracefulShutdown(syscall.SIGTERM, 200*time.Millisecond); err != nil {
 		t.Fatalf("graceful shutdown: %v", err)
 	}
-	res := proc.Wait()
+	res, err := proc.Wait()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 	if !res.IsSignal(syscall.SIGTERM) {
 		t.Fatalf("expected SIGTERM, got %v", res.signal)
 	}
@@ -626,7 +679,10 @@ func TestGracefulShutdownImmediate(t *testing.T) {
 	if err := proc.GracefulShutdown(syscall.SIGTERM, 0); err != nil {
 		t.Fatalf("graceful shutdown immediate: %v", err)
 	}
-	res := proc.Wait()
+	res, err := proc.Wait()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 	if res.ExitCode == 0 {
 		t.Fatalf("expected killed process")
 	}
@@ -664,7 +720,7 @@ func TestProcessSendSkipsStages(t *testing.T) {
 
 func TestProcessSendAfterExit(t *testing.T) {
 	proc := helperCommand("echo", "ok").Start()
-	_ = proc.Wait()
+	_, _ = proc.Wait()
 	if err := proc.Send(os.Interrupt); err == nil {
 		t.Fatalf("expected send error after exit")
 	}
@@ -717,7 +773,10 @@ func (w *orderedWriter) Write(p []byte) (int, error) {
 }
 
 func TestPipeStrictExplicit(t *testing.T) {
-	res := helperPipe(helperCommand("exit", "2").PipeStrict(), "echo", "ok").Run()
+	res, err := helperPipe(helperCommand("exit", "2").PipeStrict(), "echo", "ok").Run()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
 	if res.ExitCode != 2 {
 		t.Fatalf("expected strict pipeline to return first failure, got %d", res.ExitCode)
 	}

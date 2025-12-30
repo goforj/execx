@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/github/v/tag/goforj/execx?label=version&sort=semver" alt="Latest tag"> 
     <a href="https://codecov.io/gh/goforj/execx" ><img src="https://codecov.io/github/goforj/execx/graph/badge.svg?token=RBB8T6WQ0U"/></a>
 <!-- test-count:embed:start -->
-    <img src="https://img.shields.io/badge/tests-98-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-99-brightgreen" alt="Tests">
 <!-- test-count:embed:end -->
     <a href="https://goreportcard.com/report/github.com/goforj/execx"><img src="https://goreportcard.com/badge/github.com/goforj/execx" alt="Go Report Card"></a>
 </p>
@@ -54,10 +54,9 @@ fmt.Println(out)
 Or with structured execution:
 
 ```go
-res := execx.Command("ls", "-la").Run()
-
-if res.Err != nil {
-    log.Fatal(res.Err)
+res, err := execx.Command("ls", "-la").Run()
+if err != nil {
+    log.Fatal(err)
 }
 
 fmt.Println(res.Stdout)
@@ -95,7 +94,7 @@ This guarantees predictable behavior across platforms.
 Execute and return a structured result:
 
 ```go
-res := cmd.Run()
+_, _ = cmd.Run()
 ```
 
 ### Output Variants
@@ -119,7 +118,7 @@ out, err := cmd.Output()
 
 ```go
 proc := cmd.Start()
-proc.Wait()
+_, _ = proc.Wait()
 proc.KillAfter(5 * time.Second)
 ```
 
@@ -138,7 +137,7 @@ type Result struct {
 ```
 
 * Non-zero exit codes do **not** imply failure
-* `Err` indicates execution failure (spawn, context, signal)
+* `Err` mirrors the returned error (spawn, context, signal)
 
 ## Pipelining
 
@@ -316,8 +315,8 @@ WithContext binds the command to a context.
 ```go
 ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 defer cancel()
-res := execx.Command("go", "env", "GOOS").WithContext(ctx).Run()
-fmt.Println(res.Err == nil)
+res, err := execx.Command("go", "env", "GOOS").WithContext(ctx).Run()
+fmt.Println(err == nil && res.ExitCode == 0)
 // #bool true
 ```
 
@@ -326,8 +325,8 @@ fmt.Println(res.Err == nil)
 WithDeadline binds the command to a deadline.
 
 ```go
-res := execx.Command("go", "env", "GOOS").WithDeadline(time.Now().Add(2 * time.Second)).Run()
-fmt.Println(res.Err == nil)
+res, err := execx.Command("go", "env", "GOOS").WithDeadline(time.Now().Add(2 * time.Second)).Run()
+fmt.Println(err == nil && res.ExitCode == 0)
 // #bool true
 ```
 
@@ -336,8 +335,8 @@ fmt.Println(res.Err == nil)
 WithTimeout binds the command to a timeout.
 
 ```go
-res := execx.Command("go", "env", "GOOS").WithTimeout(2 * time.Second).Run()
-fmt.Println(res.Err == nil)
+res, err := execx.Command("go", "env", "GOOS").WithTimeout(2 * time.Second).Run()
+fmt.Println(err == nil && res.ExitCode == 0)
 // #bool true
 ```
 
@@ -451,7 +450,7 @@ fmt.Println(err.Unwrap() != nil)
 
 ### <a id="combinedoutput"></a>CombinedOutput
 
-CombinedOutput executes the command and returns stdout+stderr.
+CombinedOutput executes the command and returns stdout+stderr and any error.
 
 ```go
 out, _ := execx.Command("go", "env", "GOOS").CombinedOutput()
@@ -461,7 +460,7 @@ fmt.Println(out != "")
 
 ### <a id="output"></a>Output
 
-Output executes the command and returns stdout.
+Output executes the command and returns stdout and any error.
 
 ```go
 out, _ := execx.Command("go", "env", "GOOS").Output()
@@ -471,7 +470,7 @@ fmt.Println(out != "")
 
 ### <a id="outputbytes"></a>OutputBytes
 
-OutputBytes executes the command and returns stdout bytes.
+OutputBytes executes the command and returns stdout bytes and any error.
 
 ```go
 out, _ := execx.Command("go", "env", "GOOS").OutputBytes()
@@ -481,7 +480,7 @@ fmt.Println(len(out) > 0)
 
 ### <a id="outputtrimmed"></a>OutputTrimmed
 
-OutputTrimmed executes the command and returns trimmed stdout.
+OutputTrimmed executes the command and returns trimmed stdout and any error.
 
 ```go
 out, _ := execx.Command("go", "env", "GOOS").OutputTrimmed()
@@ -491,12 +490,12 @@ fmt.Println(out != "")
 
 ### <a id="run"></a>Run
 
-Run executes the command and returns the result.
+Run executes the command and returns the result and any error.
 
 ```go
-res := execx.Command("go", "env", "GOOS").Run()
-fmt.Println(res.Stdout)
-// darwin (or linux, windows, etc.)
+res, err := execx.Command("go", "env", "GOOS").Run()
+fmt.Println(err == nil && res.ExitCode == 0)
+// #bool true
 ```
 
 ### <a id="start"></a>Start
@@ -505,8 +504,8 @@ Start executes the command asynchronously.
 
 ```go
 proc := execx.Command("go", "env", "GOOS").Start()
-res := proc.Wait()
-fmt.Println(res.ExitCode == 0)
+res, err := proc.Wait()
+fmt.Println(err == nil && res.ExitCode == 0)
 // #bool true
 ```
 
@@ -603,7 +602,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)
 
 ### <a id="pdeathsig"></a>Pdeathsig
 
-Pdeathsig sets a parent-death signal on Linux.
+Pdeathsig is a no-op on non-Linux Unix platforms.
 
 _Example: pdeathsig_
 
@@ -695,12 +694,12 @@ fmt.Println(out)
 PipeBestEffort sets best-effort pipeline semantics.
 
 ```go
-res := execx.Command("false").
+res, err := execx.Command("false").
 	Pipe("printf", "ok").
 	PipeBestEffort().
 	Run()
-fmt.Println(res.Stdout)
-// #string ok
+fmt.Println(err == nil && res.Stdout == "ok")
+// #bool true
 ```
 
 ### <a id="pipestrict"></a>PipeStrict
@@ -708,24 +707,24 @@ fmt.Println(res.Stdout)
 PipeStrict sets strict pipeline semantics.
 
 ```go
-res := execx.Command("false").
+res, err := execx.Command("false").
 	Pipe("printf", "ok").
 	PipeStrict().
 	Run()
-fmt.Println(res.ExitCode != 0)
+fmt.Println(err == nil && res.ExitCode != 0)
 // #bool true
 ```
 
 ### <a id="pipelineresults"></a>PipelineResults
 
-PipelineResults executes the command and returns per-stage results.
+PipelineResults executes the command and returns per-stage results and any error.
 
 ```go
-results := execx.Command("printf", "go").
+results, err := execx.Command("printf", "go").
 	Pipe("tr", "a-z", "A-Z").
 	PipelineResults()
-fmt.Println(len(results))
-// #int 2
+fmt.Println(err == nil && len(results) == 2)
+// #bool true
 ```
 
 ## Process
@@ -738,8 +737,8 @@ GracefulShutdown sends a signal and escalates to kill after the timeout.
 proc := execx.Command("sleep", "2").
 	Start()
 _ = proc.GracefulShutdown(os.Interrupt, 100*time.Millisecond)
-res := proc.Wait()
-fmt.Println(res.ExitCode != 0)
+res, err := proc.Wait()
+fmt.Println(err != nil || res.ExitCode != 0)
 // #bool true
 ```
 
@@ -751,8 +750,8 @@ Interrupt sends an interrupt signal to the process.
 proc := execx.Command("sleep", "2").
 	Start()
 _ = proc.Interrupt()
-res := proc.Wait()
-fmt.Println(res.ExitCode != 0)
+res, err := proc.Wait()
+fmt.Println(err != nil || res.ExitCode != 0)
 // #bool true
 ```
 
@@ -764,8 +763,8 @@ KillAfter terminates the process after the given duration.
 proc := execx.Command("sleep", "2").
 	Start()
 proc.KillAfter(100 * time.Millisecond)
-res := proc.Wait()
-fmt.Println(res.ExitCode != 0)
+res, err := proc.Wait()
+fmt.Println(err != nil || res.ExitCode != 0)
 // #bool true
 ```
 
@@ -777,8 +776,8 @@ Send sends a signal to the process.
 proc := execx.Command("sleep", "2").
 	Start()
 _ = proc.Send(os.Interrupt)
-res := proc.Wait()
-fmt.Println(res.ExitCode != 0)
+res, err := proc.Wait()
+fmt.Println(err != nil || res.ExitCode != 0)
 // #bool true
 ```
 
@@ -790,19 +789,19 @@ Terminate kills the process immediately.
 proc := execx.Command("sleep", "2").
 	Start()
 _ = proc.Terminate()
-res := proc.Wait()
-fmt.Println(res.ExitCode != 0)
+res, err := proc.Wait()
+fmt.Println(err != nil || res.ExitCode != 0)
 // #bool true
 ```
 
 ### <a id="wait"></a>Wait
 
-Wait waits for the command to complete and returns the result.
+Wait waits for the command to complete and returns the result and any error.
 
 ```go
 proc := execx.Command("go", "env", "GOOS").Start()
-res := proc.Wait()
-fmt.Println(res.ExitCode == 0)
+res, err := proc.Wait()
+fmt.Println(err == nil && res.ExitCode == 0)
 // #bool true
 ```
 
@@ -813,8 +812,8 @@ fmt.Println(res.ExitCode == 0)
 IsExitCode reports whether the exit code matches.
 
 ```go
-res := execx.Command("go", "env", "GOOS").Run()
-fmt.Println(res.IsExitCode(0))
+res, err := execx.Command("go", "env", "GOOS").Run()
+fmt.Println(err == nil && res.IsExitCode(0))
 // #bool true
 ```
 
@@ -823,8 +822,8 @@ fmt.Println(res.IsExitCode(0))
 IsSignal reports whether the command terminated due to a signal.
 
 ```go
-res := execx.Command("go", "env", "GOOS").Run()
-fmt.Println(res.IsSignal(os.Interrupt))
+res, err := execx.Command("go", "env", "GOOS").Run()
+fmt.Println(err == nil && res.IsSignal(os.Interrupt))
 // #bool false
 ```
 
@@ -833,8 +832,8 @@ fmt.Println(res.IsSignal(os.Interrupt))
 OK reports whether the command exited cleanly without errors.
 
 ```go
-res := execx.Command("go", "env", "GOOS").Run()
-fmt.Println(res.OK())
+res, err := execx.Command("go", "env", "GOOS").Run()
+fmt.Println(err == nil && res.OK())
 // #bool true
 ```
 
@@ -846,10 +845,10 @@ OnStderr registers a line callback for stderr.
 
 ```go
 var lines []string
-execx.Command("go", "env", "-badflag").
+_, err := execx.Command("go", "env", "-badflag").
 	OnStderr(func(line string) { lines = append(lines, line) }).
 	Run()
-fmt.Println(len(lines) == 1)
+fmt.Println(err == nil && len(lines) == 1)
 // #bool true
 ```
 
@@ -859,10 +858,10 @@ OnStdout registers a line callback for stdout.
 
 ```go
 var lines []string
-execx.Command("go", "env", "GOOS").
+_, err := execx.Command("go", "env", "GOOS").
 	OnStdout(func(line string) { lines = append(lines, line) }).
 	Run()
-fmt.Println(len(lines) > 0)
+fmt.Println(err == nil && len(lines) > 0)
 // #bool true
 ```
 
@@ -872,10 +871,10 @@ StderrWriter sets a raw writer for stderr.
 
 ```go
 var out strings.Builder
-execx.Command("go", "env", "-badflag").
+_, err := execx.Command("go", "env", "-badflag").
 	StderrWriter(&out).
 	Run()
-fmt.Println(out.Len() > 0)
+fmt.Println(err == nil && out.Len() > 0)
 // #bool true
 ```
 
@@ -885,10 +884,10 @@ StdoutWriter sets a raw writer for stdout.
 
 ```go
 var out strings.Builder
-execx.Command("go", "env", "GOOS").
+_, err := execx.Command("go", "env", "GOOS").
 	StdoutWriter(&out).
 	Run()
-fmt.Println(out.Len() > 0)
+fmt.Println(err == nil && out.Len() > 0)
 // #bool true
 ```
 

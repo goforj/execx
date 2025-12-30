@@ -214,8 +214,8 @@ func (c *Cmd) Dir(path string) *Cmd {
 //
 //	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 //	defer cancel()
-//	res := execx.Command("go", "env", "GOOS").WithContext(ctx).Run()
-//	fmt.Println(res.Err == nil)
+//	res, err := execx.Command("go", "env", "GOOS").WithContext(ctx).Run()
+//	fmt.Println(err == nil && res.ExitCode == 0)
 //	// #bool true
 func (c *Cmd) WithContext(ctx context.Context) *Cmd {
 	if c.cancel != nil {
@@ -231,8 +231,8 @@ func (c *Cmd) WithContext(ctx context.Context) *Cmd {
 //
 // Example: with timeout
 //
-//	res := execx.Command("go", "env", "GOOS").WithTimeout(2 * time.Second).Run()
-//	fmt.Println(res.Err == nil)
+//	res, err := execx.Command("go", "env", "GOOS").WithTimeout(2 * time.Second).Run()
+//	fmt.Println(err == nil && res.ExitCode == 0)
 //	// #bool true
 func (c *Cmd) WithTimeout(d time.Duration) *Cmd {
 	parent := c.ctx
@@ -253,8 +253,8 @@ func (c *Cmd) WithTimeout(d time.Duration) *Cmd {
 //
 // Example: with deadline
 //
-//	res := execx.Command("go", "env", "GOOS").WithDeadline(time.Now().Add(2 * time.Second)).Run()
-//	fmt.Println(res.Err == nil)
+//	res, err := execx.Command("go", "env", "GOOS").WithDeadline(time.Now().Add(2 * time.Second)).Run()
+//	fmt.Println(err == nil && res.ExitCode == 0)
 //	// #bool true
 func (c *Cmd) WithDeadline(t time.Time) *Cmd {
 	parent := c.ctx
@@ -339,10 +339,10 @@ func (c *Cmd) StdinFile(file *os.File) *Cmd {
 // Example: stdout lines
 //
 //	var lines []string
-//	execx.Command("go", "env", "GOOS").
+//	_, err := execx.Command("go", "env", "GOOS").
 //		OnStdout(func(line string) { lines = append(lines, line) }).
 //		Run()
-//	fmt.Println(len(lines) > 0)
+//	fmt.Println(err == nil && len(lines) > 0)
 //	// #bool true
 func (c *Cmd) OnStdout(fn func(string)) *Cmd {
 	c.onStdout = fn
@@ -355,10 +355,10 @@ func (c *Cmd) OnStdout(fn func(string)) *Cmd {
 // Example: stderr lines
 //
 //	var lines []string
-//	execx.Command("go", "env", "-badflag").
+//	_, err := execx.Command("go", "env", "-badflag").
 //		OnStderr(func(line string) { lines = append(lines, line) }).
 //		Run()
-//	fmt.Println(len(lines) == 1)
+//	fmt.Println(err == nil && len(lines) == 1)
 //	// #bool true
 func (c *Cmd) OnStderr(fn func(string)) *Cmd {
 	c.onStderr = fn
@@ -371,10 +371,10 @@ func (c *Cmd) OnStderr(fn func(string)) *Cmd {
 // Example: stdout writer
 //
 //	var out strings.Builder
-//	execx.Command("go", "env", "GOOS").
+//	_, err := execx.Command("go", "env", "GOOS").
 //		StdoutWriter(&out).
 //		Run()
-//	fmt.Println(out.Len() > 0)
+//	fmt.Println(err == nil && out.Len() > 0)
 //	// #bool true
 func (c *Cmd) StdoutWriter(w io.Writer) *Cmd {
 	c.stdoutW = w
@@ -387,10 +387,10 @@ func (c *Cmd) StdoutWriter(w io.Writer) *Cmd {
 // Example: stderr writer
 //
 //	var out strings.Builder
-//	execx.Command("go", "env", "-badflag").
+//	_, err := execx.Command("go", "env", "-badflag").
 //		StderrWriter(&out).
 //		Run()
-//	fmt.Println(out.Len() > 0)
+//	fmt.Println(err == nil && out.Len() > 0)
 //	// #bool true
 func (c *Cmd) StderrWriter(w io.Writer) *Cmd {
 	c.stderrW = w
@@ -429,11 +429,11 @@ func (c *Cmd) Pipe(name string, args ...string) *Cmd {
 //
 // Example: strict
 //
-//	res := execx.Command("false").
+//	res, err := execx.Command("false").
 //		Pipe("printf", "ok").
 //		PipeStrict().
 //		Run()
-//	fmt.Println(res.ExitCode != 0)
+//	fmt.Println(err == nil && res.ExitCode != 0)
 //	// #bool true
 func (c *Cmd) PipeStrict() *Cmd {
 	c.rootCmd().pipeMode = pipeStrict
@@ -445,12 +445,12 @@ func (c *Cmd) PipeStrict() *Cmd {
 //
 // Example: best effort
 //
-//	res := execx.Command("false").
+//	res, err := execx.Command("false").
 //		Pipe("printf", "ok").
 //		PipeBestEffort().
 //		Run()
-//	fmt.Println(res.Stdout)
-//	// #string ok
+//	fmt.Println(err == nil && res.Stdout == "ok")
+//	// #bool true
 func (c *Cmd) PipeBestEffort() *Cmd {
 	c.rootCmd().pipeMode = pipeBestEffort
 	return c
@@ -521,23 +521,23 @@ func (c *Cmd) ShellEscaped() string {
 	return strings.Join(parts, " ")
 }
 
-// Run executes the command and returns the result.
+// Run executes the command and returns the result and any error.
 // @group Execution
 //
 // Example: run
 //
-//	res := execx.Command("go", "env", "GOOS").Run()
-//	fmt.Println(res.Stdout)
-//	// darwin (or linux, windows, etc.)
-func (c *Cmd) Run() Result {
+//	res, err := execx.Command("go", "env", "GOOS").Run()
+//	fmt.Println(err == nil && res.ExitCode == 0)
+//	// #bool true
+func (c *Cmd) Run() (Result, error) {
 	pipe := c.newPipeline(false)
 	pipe.start()
 	pipe.wait()
 	result, _ := pipe.primaryResult(c.rootCmd().pipeMode)
-	return result
+	return result, result.Err
 }
 
-// Output executes the command and returns stdout.
+// Output executes the command and returns stdout and any error.
 // @group Execution
 //
 // Example: output
@@ -546,11 +546,11 @@ func (c *Cmd) Run() Result {
 //	fmt.Println(out != "")
 //	// #bool true
 func (c *Cmd) Output() (string, error) {
-	result := c.Run()
-	return result.Stdout, result.Err
+	result, err := c.Run()
+	return result.Stdout, err
 }
 
-// OutputBytes executes the command and returns stdout bytes.
+// OutputBytes executes the command and returns stdout bytes and any error.
 // @group Execution
 //
 // Example: output bytes
@@ -559,11 +559,11 @@ func (c *Cmd) Output() (string, error) {
 //	fmt.Println(len(out) > 0)
 //	// #bool true
 func (c *Cmd) OutputBytes() ([]byte, error) {
-	result := c.Run()
-	return []byte(result.Stdout), result.Err
+	result, err := c.Run()
+	return []byte(result.Stdout), err
 }
 
-// OutputTrimmed executes the command and returns trimmed stdout.
+// OutputTrimmed executes the command and returns trimmed stdout and any error.
 // @group Execution
 //
 // Example: output trimmed
@@ -572,11 +572,11 @@ func (c *Cmd) OutputBytes() ([]byte, error) {
 //	fmt.Println(out != "")
 //	// #bool true
 func (c *Cmd) OutputTrimmed() (string, error) {
-	result := c.Run()
-	return strings.TrimSpace(result.Stdout), result.Err
+	result, err := c.Run()
+	return strings.TrimSpace(result.Stdout), err
 }
 
-// CombinedOutput executes the command and returns stdout+stderr.
+// CombinedOutput executes the command and returns stdout+stderr and any error.
 // @group Execution
 //
 // Example: combined output
@@ -592,21 +592,22 @@ func (c *Cmd) CombinedOutput() (string, error) {
 	return combined, result.Err
 }
 
-// PipelineResults executes the command and returns per-stage results.
+// PipelineResults executes the command and returns per-stage results and any error.
 // @group Pipelining
 //
 // Example: pipeline results
 //
-//	results := execx.Command("printf", "go").
+//	results, err := execx.Command("printf", "go").
 //		Pipe("tr", "a-z", "A-Z").
 //		PipelineResults()
-//	fmt.Println(len(results))
-//	// #int 2
-func (c *Cmd) PipelineResults() []Result {
+//	fmt.Println(err == nil && len(results) == 2)
+//	// #bool true
+func (c *Cmd) PipelineResults() ([]Result, error) {
 	pipe := c.newPipeline(false)
 	pipe.start()
 	pipe.wait()
-	return pipe.results()
+	results := pipe.results()
+	return results, firstResultErr(results)
 }
 
 // Start executes the command asynchronously.
@@ -615,8 +616,8 @@ func (c *Cmd) PipelineResults() []Result {
 // Example: start
 //
 //	proc := execx.Command("go", "env", "GOOS").Start()
-//	res := proc.Wait()
-//	fmt.Println(res.ExitCode == 0)
+//	res, err := proc.Wait()
+//	fmt.Println(err == nil && res.ExitCode == 0)
 //	// #bool true
 func (c *Cmd) Start() *Process {
 	pipe := c.newPipeline(false)
@@ -742,6 +743,15 @@ func buildEnv(mode envMode, env map[string]string) []string {
 	return list
 }
 
+func firstResultErr(results []Result) error {
+	for _, res := range results {
+		if res.Err != nil {
+			return res.Err
+		}
+	}
+	return nil
+}
+
 func shellEscape(arg string) string {
 	if arg == "" {
 		return "''"
@@ -765,18 +775,18 @@ type Process struct {
 	killTimer  *time.Timer
 }
 
-// Wait waits for the command to complete and returns the result.
+// Wait waits for the command to complete and returns the result and any error.
 // @group Process
 //
 // Example: wait
 //
 //	proc := execx.Command("go", "env", "GOOS").Start()
-//	res := proc.Wait()
-//	fmt.Println(res.ExitCode == 0)
+//	res, err := proc.Wait()
+//	fmt.Println(err == nil && res.ExitCode == 0)
 //	// #bool true
-func (p *Process) Wait() Result {
+func (p *Process) Wait() (Result, error) {
 	<-p.done
-	return p.result
+	return p.result, p.result.Err
 }
 
 // KillAfter terminates the process after the given duration.
@@ -787,8 +797,8 @@ func (p *Process) Wait() Result {
 //	proc := execx.Command("sleep", "2").
 //		Start()
 //	proc.KillAfter(100 * time.Millisecond)
-//	res := proc.Wait()
-//	fmt.Println(res.ExitCode != 0)
+//	res, err := proc.Wait()
+//	fmt.Println(err != nil || res.ExitCode != 0)
 //	// #bool true
 func (p *Process) KillAfter(d time.Duration) {
 	p.mu.Lock()
@@ -809,8 +819,8 @@ func (p *Process) KillAfter(d time.Duration) {
 //	proc := execx.Command("sleep", "2").
 //		Start()
 //	_ = proc.Send(os.Interrupt)
-//	res := proc.Wait()
-//	fmt.Println(res.ExitCode != 0)
+//	res, err := proc.Wait()
+//	fmt.Println(err != nil || res.ExitCode != 0)
 //	// #bool true
 func (p *Process) Send(sig os.Signal) error {
 	return p.signalAll(func(proc *os.Process) error {
@@ -826,8 +836,8 @@ func (p *Process) Send(sig os.Signal) error {
 //	proc := execx.Command("sleep", "2").
 //		Start()
 //	_ = proc.Interrupt()
-//	res := proc.Wait()
-//	fmt.Println(res.ExitCode != 0)
+//	res, err := proc.Wait()
+//	fmt.Println(err != nil || res.ExitCode != 0)
 //	// #bool true
 func (p *Process) Interrupt() error {
 	return p.Send(os.Interrupt)
@@ -841,8 +851,8 @@ func (p *Process) Interrupt() error {
 //	proc := execx.Command("sleep", "2").
 //		Start()
 //	_ = proc.Terminate()
-//	res := proc.Wait()
-//	fmt.Println(res.ExitCode != 0)
+//	res, err := proc.Wait()
+//	fmt.Println(err != nil || res.ExitCode != 0)
 //	// #bool true
 func (p *Process) Terminate() error {
 	return p.signalAll(func(proc *os.Process) error {
@@ -858,8 +868,8 @@ func (p *Process) Terminate() error {
 //	proc := execx.Command("sleep", "2").
 //		Start()
 //	_ = proc.GracefulShutdown(os.Interrupt, 100*time.Millisecond)
-//	res := proc.Wait()
-//	fmt.Println(res.ExitCode != 0)
+//	res, err := proc.Wait()
+//	fmt.Println(err != nil || res.ExitCode != 0)
 //	// #bool true
 func (p *Process) GracefulShutdown(sig os.Signal, timeout time.Duration) error {
 	if timeout <= 0 {

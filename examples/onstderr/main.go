@@ -13,9 +13,9 @@ func main() {
 
 	// Example: stderr lines
 	var lines []string
-	execx.Command("go", "env", "-badflag").
+	_, err := execx.Command("go", "env", "-badflag").
 		OnStderr(func(line string) { lines = append(lines, line) }).
 		Run()
-	fmt.Println(len(lines) == 1)
+	fmt.Println(err == nil && len(lines) == 1)
 	// #bool true
 }

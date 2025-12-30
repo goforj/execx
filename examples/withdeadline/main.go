@@ -13,7 +13,7 @@ func main() {
 	// WithDeadline binds the command to a deadline.
 
 	// Example: with deadline
-	res := execx.Command("go", "env", "GOOS").WithDeadline(time.Now().Add(2 * time.Second)).Run()
-	fmt.Println(res.Err == nil)
+	res, err := execx.Command("go", "env", "GOOS").WithDeadline(time.Now().Add(2 * time.Second)).Run()
+	fmt.Println(err == nil && res.ExitCode == 0)
 	// #bool true
 }

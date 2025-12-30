@@ -9,10 +9,10 @@ import (
 )
 
 func main() {
-	// Run executes the command and returns the result.
+	// Run executes the command and returns the result and any error.
 
 	// Example: run
-	res := execx.Command("go", "env", "GOOS").Run()
-	fmt.Println(res.Stdout)
-	// darwin (or linux, windows, etc.)
+	res, err := execx.Command("go", "env", "GOOS").Run()
+	fmt.Println(err == nil && res.ExitCode == 0)
+	// #bool true
 }
