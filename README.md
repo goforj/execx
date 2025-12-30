@@ -517,17 +517,11 @@ fmt.Println(res.ExitCode == 0)
 StdinBytes sets stdin from bytes.
 
 ```go
-if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "stdin" {
-	buf := make([]byte, 8)
-	n, _ := os.Stdin.Read(buf)
-	_, _ = os.Stdout.Write(buf[:n])
-	return
-}
-out, _ := execx.Command(os.Args[0], "execx-example", "stdin").
+out, _ := execx.Command("cat").
 	StdinBytes([]byte("hi")).
 	Output()
-fmt.Println(out == "hi")
-// #bool true
+fmt.Println(out)
+// #string hi
 ```
 
 ### <a id="stdinfile"></a>StdinFile
@@ -535,20 +529,14 @@ fmt.Println(out == "hi")
 StdinFile sets stdin from a file.
 
 ```go
-if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "stdin" {
-	buf := make([]byte, 8)
-	n, _ := os.Stdin.Read(buf)
-	_, _ = os.Stdout.Write(buf[:n])
-	return
-}
 file, _ := os.CreateTemp("", "execx-stdin")
 _, _ = file.WriteString("hi")
 _, _ = file.Seek(0, 0)
-out, _ := execx.Command(os.Args[0], "execx-example", "stdin").
+out, _ := execx.Command("cat").
 	StdinFile(file).
 	Output()
-fmt.Println(out == "hi")
-// #bool true
+fmt.Println(out)
+// #string hi
 ```
 
 ### <a id="stdinreader"></a>StdinReader
@@ -556,17 +544,11 @@ fmt.Println(out == "hi")
 StdinReader sets stdin from an io.Reader.
 
 ```go
-if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "stdin" {
-	buf := make([]byte, 8)
-	n, _ := os.Stdin.Read(buf)
-	_, _ = os.Stdout.Write(buf[:n])
-	return
-}
-out, _ := execx.Command(os.Args[0], "execx-example", "stdin").
+out, _ := execx.Command("cat").
 	StdinReader(strings.NewReader("hi")).
 	Output()
-fmt.Println(out == "hi")
-// #bool true
+fmt.Println(out)
+// #string hi
 ```
 
 ### <a id="stdinstring"></a>StdinString
@@ -574,17 +556,11 @@ fmt.Println(out == "hi")
 StdinString sets stdin from a string.
 
 ```go
-if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "stdin" {
-	buf := make([]byte, 8)
-	n, _ := os.Stdin.Read(buf)
-	_, _ = os.Stdout.Write(buf[:n])
-	return
-}
-out, _ := execx.Command(os.Args[0], "execx-example", "stdin").
+out, _ := execx.Command("cat").
 	StdinString("hi").
 	Output()
-fmt.Println(out == "hi")
-// #bool true
+fmt.Println(out)
+// #string hi
 ```
 
 ## OS Controls
@@ -627,7 +603,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)
 
 ### <a id="pdeathsig"></a>Pdeathsig
 
-Pdeathsig sets a parent-death signal on Linux.
+Pdeathsig is a no-op on non-Linux Unix platforms.
 
 _Example: pdeathsig_
 

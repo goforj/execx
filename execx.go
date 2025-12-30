@@ -280,17 +280,11 @@ func (c *Cmd) WithDeadline(t time.Time) *Cmd {
 //
 // Example: stdin string
 //
-//	if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "stdin" {
-//		buf := make([]byte, 8)
-//		n, _ := os.Stdin.Read(buf)
-//		_, _ = os.Stdout.Write(buf[:n])
-//		return
-//	}
-//	out, _ := execx.Command(os.Args[0], "execx-example", "stdin").
+//	out, _ := execx.Command("cat").
 //		StdinString("hi").
 //		Output()
-//	fmt.Println(out == "hi")
-//	// #bool true
+//	fmt.Println(out)
+//	// #string hi
 func (c *Cmd) StdinString(input string) *Cmd {
 	c.stdin = strings.NewReader(input)
 	return c
@@ -301,17 +295,11 @@ func (c *Cmd) StdinString(input string) *Cmd {
 //
 // Example: stdin bytes
 //
-//	if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "stdin" {
-//		buf := make([]byte, 8)
-//		n, _ := os.Stdin.Read(buf)
-//		_, _ = os.Stdout.Write(buf[:n])
-//		return
-//	}
-//	out, _ := execx.Command(os.Args[0], "execx-example", "stdin").
+//	out, _ := execx.Command("cat").
 //		StdinBytes([]byte("hi")).
 //		Output()
-//	fmt.Println(out == "hi")
-//	// #bool true
+//	fmt.Println(out)
+//	// #string hi
 func (c *Cmd) StdinBytes(input []byte) *Cmd {
 	c.stdin = bytes.NewReader(input)
 	return c
@@ -322,17 +310,11 @@ func (c *Cmd) StdinBytes(input []byte) *Cmd {
 //
 // Example: stdin reader
 //
-//	if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "stdin" {
-//		buf := make([]byte, 8)
-//		n, _ := os.Stdin.Read(buf)
-//		_, _ = os.Stdout.Write(buf[:n])
-//		return
-//	}
-//	out, _ := execx.Command(os.Args[0], "execx-example", "stdin").
+//	out, _ := execx.Command("cat").
 //		StdinReader(strings.NewReader("hi")).
 //		Output()
-//	fmt.Println(out == "hi")
-//	// #bool true
+//	fmt.Println(out)
+//	// #string hi
 func (c *Cmd) StdinReader(reader io.Reader) *Cmd {
 	c.stdin = reader
 	return c
@@ -343,20 +325,14 @@ func (c *Cmd) StdinReader(reader io.Reader) *Cmd {
 //
 // Example: stdin file
 //
-//	if len(os.Args) > 2 && os.Args[1] == "execx-example" && os.Args[2] == "stdin" {
-//		buf := make([]byte, 8)
-//		n, _ := os.Stdin.Read(buf)
-//		_, _ = os.Stdout.Write(buf[:n])
-//		return
-//	}
 //	file, _ := os.CreateTemp("", "execx-stdin")
 //	_, _ = file.WriteString("hi")
 //	_, _ = file.Seek(0, 0)
-//	out, _ := execx.Command(os.Args[0], "execx-example", "stdin").
+//	out, _ := execx.Command("cat").
 //		StdinFile(file).
 //		Output()
-//	fmt.Println(out == "hi")
-//	// #bool true
+//	fmt.Println(out)
+//	// #string hi
 func (c *Cmd) StdinFile(file *os.File) *Cmd {
 	c.stdin = file
 	return c
