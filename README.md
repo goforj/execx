@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-    **execx** is an ergonomic, fluent wrapper around Go’s `os/exec` package.
+    execx is an ergonomic, fluent wrapper around Go’s `os/exec` package.
 </p>
 
 <p align="center">
