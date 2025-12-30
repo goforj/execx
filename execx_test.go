@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -62,6 +63,12 @@ func TestHelperProcess(t *testing.T) {
 		}
 		_ = syscall.Kill(os.Getpid(), syscall.SIGTERM)
 		time.Sleep(50 * time.Millisecond)
+	case "ignore-term":
+		if runtime.GOOS == "windows" {
+			os.Exit(3)
+		}
+		signal.Ignore(syscall.SIGTERM, os.Interrupt)
+		time.Sleep(200 * time.Millisecond)
 	default:
 		os.Exit(1)
 	}
@@ -360,12 +367,26 @@ func TestPipeChain(t *testing.T) {
 	}
 }
 
+func TestPipeBestEffortSetsError(t *testing.T) {
+	res := helperPipe(helperCommand("sleep", "50").WithTimeout(10*time.Millisecond).PipeBestEffort(), "echo", "ok").Run()
+	if res.Err == nil || !errorsIsContext(res.Err) {
+		t.Fatalf("expected context error, got %v", res.Err)
+	}
+	if res.Stdout != "ok" {
+		t.Fatalf("expected stdout from last stage, got %q", res.Stdout)
+	}
+}
+
 func TestPipeStartError(t *testing.T) {
 	bad := Command("execx-does-not-exist")
 	stage := helperPipe(bad, "echo", "ok")
 	res := stage.Run()
 	if res.Err == nil {
 		t.Fatalf("expected start error")
+	}
+	var errExec ErrExec
+	if !errors.As(res.Err, &errExec) {
+		t.Fatalf("expected ErrExec, got %T", res.Err)
 	}
 	if res.ExitCode != -1 {
 		t.Fatalf("expected exit code -1, got %d", res.ExitCode)
@@ -410,6 +431,44 @@ func TestLineCallbacks(t *testing.T) {
 	}
 }
 
+func TestWritersBeforeLineCallbacks(t *testing.T) {
+	var order []string
+	var stdoutLines []string
+	writer := &orderedWriter{order: &order, tag: "writer"}
+	res := helperCommand("lines").StdoutWriter(writer).OnStdout(func(line string) {
+		if len(stdoutLines) == 0 {
+			order = append(order, "line")
+		}
+		stdoutLines = append(stdoutLines, line)
+	}).Run()
+	if res.Err != nil {
+		t.Fatalf("expected no error, got %v", res.Err)
+	}
+	if len(order) == 0 || order[0] != "writer" {
+		t.Fatalf("expected writer before line callback, got %v", order)
+	}
+	if len(writer.buf) == 0 {
+		t.Fatalf("expected writer to receive output")
+	}
+}
+
+func TestStderrWriter(t *testing.T) {
+	var stderrLines []string
+	writer := &orderedWriter{tag: "stderr"}
+	res := helperCommand("lines").StderrWriter(writer).OnStderr(func(line string) {
+		stderrLines = append(stderrLines, line)
+	}).Run()
+	if res.Err != nil {
+		t.Fatalf("expected no error, got %v", res.Err)
+	}
+	if len(writer.buf) == 0 {
+		t.Fatalf("expected stderr writer to receive output")
+	}
+	if strings.Join(stderrLines, ",") != "c" {
+		t.Fatalf("unexpected stderr lines: %v", stderrLines)
+	}
+}
+
 func TestStartAndWait(t *testing.T) {
 	proc := helperCommand("sleep", "50").Start()
 	res := proc.Wait()
@@ -422,6 +481,10 @@ func TestStartError(t *testing.T) {
 	res := Command("execx-does-not-exist").Run()
 	if res.Err == nil {
 		t.Fatalf("expected start error")
+	}
+	var errExec ErrExec
+	if !errors.As(res.Err, &errExec) {
+		t.Fatalf("expected ErrExec, got %T", res.Err)
 	}
 	if res.ExitCode != -1 {
 		t.Fatalf("expected exit code -1 for start error, got %d", res.ExitCode)
@@ -462,6 +525,189 @@ func TestStageResultContextError(t *testing.T) {
 	if res.ExitCode != -1 {
 		t.Fatalf("expected exit code -1, got %d", res.ExitCode)
 	}
+}
+
+func TestPipelineResults(t *testing.T) {
+	root := helperCommand("echo", "a")
+	stage := helperPipe(root, "echo", "b")
+	final := helperPipe(stage, "echo", "c")
+	results := final.PipelineResults()
+	if len(results) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(results))
+	}
+	if results[2].Stdout != "c" {
+		t.Fatalf("expected last stage stdout, got %q", results[2].Stdout)
+	}
+}
+
+func TestProcessSignals(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("signals not supported on windows")
+	}
+	proc := helperCommand("sleep", "200").Start()
+	if err := proc.Send(syscall.SIGTERM); err != nil {
+		t.Fatalf("send signal: %v", err)
+	}
+	res := proc.Wait()
+	if !res.IsSignal(syscall.SIGTERM) {
+		t.Fatalf("expected SIGTERM, got %v", res.signal)
+	}
+}
+
+func TestProcessInterrupt(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("signals not supported on windows")
+	}
+	proc := helperCommand("sleep", "200").Start()
+	if err := proc.Interrupt(); err != nil {
+		t.Fatalf("interrupt: %v", err)
+	}
+	res := proc.Wait()
+	if !res.IsSignal(os.Interrupt) {
+		t.Fatalf("expected interrupt, got %v", res.signal)
+	}
+}
+
+func TestProcessTerminate(t *testing.T) {
+	proc := helperCommand("sleep", "200").Start()
+	if err := proc.Terminate(); err != nil {
+		t.Fatalf("terminate: %v", err)
+	}
+	res := proc.Wait()
+	if res.ExitCode == 0 {
+		t.Fatalf("expected non-zero exit")
+	}
+}
+
+func TestGracefulShutdownKills(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("signals not supported on windows")
+	}
+	proc := helperCommand("ignore-term").Start()
+	time.Sleep(50 * time.Millisecond)
+	if err := proc.GracefulShutdown(syscall.SIGTERM, 20*time.Millisecond); err != nil {
+		t.Fatalf("graceful shutdown: %v", err)
+	}
+	res := proc.Wait()
+	if !res.IsSignal(syscall.SIGKILL) {
+		t.Fatalf("expected SIGKILL, got %v", res.signal)
+	}
+}
+
+func TestKillAfter(t *testing.T) {
+	proc := helperCommand("sleep", "200").Start()
+	proc.KillAfter(10 * time.Millisecond)
+	proc.KillAfter(20 * time.Millisecond)
+	res := proc.Wait()
+	if res.ExitCode == 0 {
+		t.Fatalf("expected killed process")
+	}
+}
+
+func TestGracefulShutdownCompletes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("signals not supported on windows")
+	}
+	proc := helperCommand("sleep", "200").Start()
+	if err := proc.GracefulShutdown(syscall.SIGTERM, 200*time.Millisecond); err != nil {
+		t.Fatalf("graceful shutdown: %v", err)
+	}
+	res := proc.Wait()
+	if !res.IsSignal(syscall.SIGTERM) {
+		t.Fatalf("expected SIGTERM, got %v", res.signal)
+	}
+}
+
+func TestGracefulShutdownImmediate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("signals not supported on windows")
+	}
+	proc := helperCommand("sleep", "200").Start()
+	if err := proc.GracefulShutdown(syscall.SIGTERM, 0); err != nil {
+		t.Fatalf("graceful shutdown immediate: %v", err)
+	}
+	res := proc.Wait()
+	if res.ExitCode == 0 {
+		t.Fatalf("expected killed process")
+	}
+}
+
+func TestProcessSendErrors(t *testing.T) {
+	var proc *Process
+	if err := proc.Send(os.Interrupt); err == nil {
+		t.Fatalf("expected send error for nil process")
+	}
+	proc = &Process{pipeline: &pipeline{}}
+	if err := proc.Send(os.Interrupt); err == nil {
+		t.Fatalf("expected send error for empty pipeline")
+	}
+	if err := proc.GracefulShutdown(os.Interrupt, 10*time.Millisecond); err == nil {
+		t.Fatalf("expected graceful shutdown error for empty pipeline")
+	}
+}
+
+func TestProcessSendSkipsStages(t *testing.T) {
+	proc := &Process{
+		pipeline: &pipeline{
+			stages: []*stage{
+				nil,
+				{},
+				{cmd: &exec.Cmd{}},
+			},
+		},
+		done: make(chan struct{}),
+	}
+	if err := proc.Send(os.Interrupt); err == nil {
+		t.Fatalf("expected send error for empty stages")
+	}
+}
+
+func TestProcessSendAfterExit(t *testing.T) {
+	proc := helperCommand("echo", "ok").Start()
+	_ = proc.Wait()
+	if err := proc.Send(os.Interrupt); err == nil {
+		t.Fatalf("expected send error after exit")
+	}
+}
+
+func TestErrExecMethods(t *testing.T) {
+	baseErr := errors.New("boom")
+	execErr := ErrExec{Err: baseErr}
+	if execErr.Error() != "boom" {
+		t.Fatalf("unexpected error string: %q", execErr.Error())
+	}
+	if !errors.Is(execErr, baseErr) {
+		t.Fatalf("expected unwrap to match")
+	}
+	empty := ErrExec{}
+	if empty.Error() == "" {
+		t.Fatalf("expected default error string")
+	}
+	if empty.Unwrap() != nil {
+		t.Fatalf("expected nil unwrap")
+	}
+}
+
+func TestSysProcAttrNoops(t *testing.T) {
+	cmd := Command("echo")
+	cmd.CreationFlags(123).HideWindow(true).Pdeathsig(syscall.SIGTERM)
+	if cmd.sysProcAttr != nil {
+		t.Fatalf("expected no sys proc attr on unsupported platform")
+	}
+}
+
+type orderedWriter struct {
+	order *[]string
+	tag   string
+	buf   []byte
+}
+
+func (w *orderedWriter) Write(p []byte) (int, error) {
+	if w.order != nil && len(*w.order) == 0 {
+		*w.order = append(*w.order, w.tag)
+	}
+	w.buf = append(w.buf, p...)
+	return len(p), nil
 }
 
 func TestPipeStrictExplicit(t *testing.T) {

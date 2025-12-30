@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -57,6 +58,10 @@ type Cmd struct {
 
 	onStdout func(string)
 	onStderr func(string)
+	stdoutW  io.Writer
+	stderrW  io.Writer
+
+	sysProcAttr *syscall.SysProcAttr
 
 	next     *Cmd
 	root     *Cmd
@@ -224,6 +229,18 @@ func (c *Cmd) OnStderr(fn func(string)) *Cmd {
 	return c
 }
 
+// StdoutWriter sets a raw writer for stdout.
+func (c *Cmd) StdoutWriter(w io.Writer) *Cmd {
+	c.stdoutW = w
+	return c
+}
+
+// StderrWriter sets a raw writer for stderr.
+func (c *Cmd) StderrWriter(w io.Writer) *Cmd {
+	c.stderrW = w
+	return c
+}
+
 // Pipe appends a new command to the pipeline.
 func (c *Cmd) Pipe(name string, args ...string) *Cmd {
 	root := c.rootCmd()
@@ -293,7 +310,10 @@ func (c *Cmd) ShellEscaped() string {
 
 // Run executes the command and returns the result.
 func (c *Cmd) Run() Result {
-	result, _ := c.runInternal(false)
+	pipe := c.newPipeline(false)
+	pipe.start()
+	pipe.wait()
+	result, _ := pipe.primaryResult(c.rootCmd().pipeMode)
 	return result
 }
 
@@ -317,17 +337,35 @@ func (c *Cmd) OutputTrimmed() (string, error) {
 
 // CombinedOutput executes the command and returns stdout+stderr.
 func (c *Cmd) CombinedOutput() (string, error) {
-	result, combined := c.runInternal(true)
+	pipe := c.newPipeline(true)
+	pipe.start()
+	pipe.wait()
+	result, combined := pipe.primaryResult(c.rootCmd().pipeMode)
 	return combined, result.Err
+}
+
+// PipelineResults executes the command and returns per-stage results.
+func (c *Cmd) PipelineResults() []Result {
+	pipe := c.newPipeline(false)
+	pipe.start()
+	pipe.wait()
+	return pipe.results()
 }
 
 // Start executes the command asynchronously.
 func (c *Cmd) Start() *Process {
-	proc := &Process{resultCh: make(chan Result, 1)}
+	pipe := c.newPipeline(false)
+	pipe.start()
+
+	proc := &Process{
+		pipeline: pipe,
+		mode:     c.rootCmd().pipeMode,
+		done:     make(chan struct{}),
+	}
 	go func() {
-		res := c.Run()
-		proc.resultCh <- res
-		close(proc.resultCh)
+		pipe.wait()
+		result, _ := pipe.primaryResult(proc.mode)
+		proc.finish(result)
 	}()
 	return proc
 }
@@ -346,132 +384,24 @@ func (c *Cmd) rootCmd() *Cmd {
 	return c
 }
 
-type stage struct {
-	cmd         *exec.Cmd
-	def         *Cmd
-	stdoutBuf   bytes.Buffer
-	stderrBuf   bytes.Buffer
-	combinedBuf bytes.Buffer
-	startErr    error
-	waitErr     error
-	startTime   time.Time
-	pipeWriter  *io.PipeWriter
-}
-
-func (c *Cmd) runInternal(withCombined bool) (Result, string) {
-	stages := c.pipelineStages()
-	for _, stage := range stages {
-		stage.startTime = time.Now()
-		stage.cmd = stage.def.execCmd()
-		stdoutWriter := stage.def.stdoutWriter(&stage.stdoutBuf, withCombined, &stage.combinedBuf)
-		stderrWriter := stage.def.stderrWriter(&stage.stderrBuf, withCombined, &stage.combinedBuf)
-		stage.cmd.Stdout = stdoutWriter
-		stage.cmd.Stderr = stderrWriter
-	}
-
-	for i := range stages {
-		if i == 0 {
-			stages[i].cmd.Stdin = stages[i].def.stdin
-			continue
-		}
-		reader, writer := io.Pipe()
-		stages[i-1].pipeWriter = writer
-		stages[i].cmd.Stdin = reader
-		stages[i-1].cmd.Stdout = io.MultiWriter(stages[i-1].cmd.Stdout, writer)
-	}
-
-	for i, stage := range stages {
-		stage.startErr = stage.cmd.Start()
-		if stage.startErr != nil {
-			for j := i + 1; j < len(stages); j++ {
-				stages[j].startErr = stage.startErr
-			}
-			break
-		}
-	}
-
-	for i := range stages {
-		if stages[i].startErr != nil {
-			if stages[i].pipeWriter != nil {
-				_ = stages[i].pipeWriter.Close()
-			}
-			continue
-		}
-		stages[i].waitErr = stages[i].cmd.Wait()
-		if stages[i].pipeWriter != nil {
-			_ = stages[i].pipeWriter.Close()
-		}
-	}
-
-	results := make([]Result, 0, len(stages))
-	for _, stage := range stages {
-		results = append(results, stage.result())
-	}
-
-	primaryIndex := len(results) - 1
-	if c.rootCmd().pipeMode == pipeStrict {
-		for i, res := range results {
-			if res.ExitCode != 0 || res.Err != nil {
-				primaryIndex = i
-				break
-			}
-		}
-	}
-
-	primary := results[primaryIndex]
-	combined := ""
-	if withCombined {
-		combined = stages[primaryIndex].combinedBuf.String()
-	}
-	return primary, combined
-}
-
-func (s *stage) result() Result {
-	res := Result{
-		Stdout:   s.stdoutBuf.String(),
-		Stderr:   s.stderrBuf.String(),
-		ExitCode: -1,
-		Duration: time.Since(s.startTime),
-	}
-	if s.startErr != nil {
-		res.Err = s.startErr
-		return res
-	}
-	if s.waitErr != nil {
-		if errors.Is(s.waitErr, context.Canceled) || errors.Is(s.waitErr, context.DeadlineExceeded) {
-			res.Err = s.waitErr
-		}
-		if res.Err == nil && s.def.ctx != nil && s.def.ctx.Err() != nil {
-			res.Err = s.def.ctx.Err()
-		}
-	}
-	if s.cmd.ProcessState != nil {
-		res.ExitCode = s.cmd.ProcessState.ExitCode()
-		res.signal = signalFromState(s.cmd.ProcessState)
-	}
-	return res
-}
-
-func (c *Cmd) pipelineStages() []*stage {
-	root := c.rootCmd()
-	stages := []*stage{}
-	for current := root; current != nil; current = current.next {
-		stages = append(stages, &stage{def: current})
-	}
-	return stages
-}
-
 func (c *Cmd) execCmd() *exec.Cmd {
 	cmd := exec.CommandContext(c.ctxOrBackground(), c.name, c.args...)
 	if c.dir != "" {
 		cmd.Dir = c.dir
 	}
 	cmd.Env = buildEnv(c.envMode, c.env)
+	if c.sysProcAttr != nil {
+		cmd.SysProcAttr = c.sysProcAttr
+	}
 	return cmd
 }
 
 func (c *Cmd) stdoutWriter(buf *bytes.Buffer, withCombined bool, combined *bytes.Buffer) io.Writer {
-	writers := []io.Writer{buf}
+	writers := []io.Writer{}
+	if c.stdoutW != nil {
+		writers = append(writers, c.stdoutW)
+	}
+	writers = append(writers, buf)
 	if withCombined {
 		writers = append(writers, combined)
 	}
@@ -485,7 +415,11 @@ func (c *Cmd) stdoutWriter(buf *bytes.Buffer, withCombined bool, combined *bytes
 }
 
 func (c *Cmd) stderrWriter(buf *bytes.Buffer, withCombined bool, combined *bytes.Buffer) io.Writer {
-	writers := []io.Writer{buf}
+	writers := []io.Writer{}
+	if c.stderrW != nil {
+		writers = append(writers, c.stderrW)
+	}
+	writers = append(writers, buf)
 	if withCombined {
 		writers = append(writers, combined)
 	}
@@ -556,15 +490,95 @@ func shellEscape(arg string) string {
 
 // Process represents an asynchronously running command.
 type Process struct {
+	pipeline *pipeline
+	mode     pipeMode
+	done     chan struct{}
+	result   Result
+
 	resultOnce sync.Once
-	result     Result
-	resultCh   chan Result
+	mu         sync.Mutex
+	killTimer  *time.Timer
 }
 
 // Wait waits for the command to complete and returns the result.
 func (p *Process) Wait() Result {
-	p.resultOnce.Do(func() {
-		p.result = <-p.resultCh
-	})
+	<-p.done
 	return p.result
+}
+
+// KillAfter terminates the process after the given duration.
+func (p *Process) KillAfter(d time.Duration) {
+	p.mu.Lock()
+	if p.killTimer != nil {
+		p.killTimer.Stop()
+	}
+	p.killTimer = time.AfterFunc(d, func() {
+		_ = p.Terminate()
+	})
+	p.mu.Unlock()
+}
+
+// Send sends a signal to the process.
+func (p *Process) Send(sig os.Signal) error {
+	return p.signalAll(func(proc *os.Process) error {
+		return proc.Signal(sig)
+	})
+}
+
+// Interrupt sends an interrupt signal to the process.
+func (p *Process) Interrupt() error {
+	return p.Send(os.Interrupt)
+}
+
+// Terminate kills the process immediately.
+func (p *Process) Terminate() error {
+	return p.signalAll(func(proc *os.Process) error {
+		return proc.Kill()
+	})
+}
+
+// GracefulShutdown sends a signal and escalates to kill after the timeout.
+func (p *Process) GracefulShutdown(sig os.Signal, timeout time.Duration) error {
+	if timeout <= 0 {
+		return p.Terminate()
+	}
+	if err := p.Send(sig); err != nil {
+		return err
+	}
+	select {
+	case <-p.done:
+		return nil
+	case <-time.After(timeout):
+	}
+	_ = p.Terminate()
+	<-p.done
+	return nil
+}
+
+func (p *Process) finish(result Result) {
+	p.resultOnce.Do(func() {
+		p.result = result
+		close(p.done)
+	})
+}
+
+func (p *Process) signalAll(send func(*os.Process) error) error {
+	if p == nil || p.pipeline == nil {
+		return errors.New("process not started")
+	}
+	var firstErr error
+	count := 0
+	for _, stage := range p.pipeline.stages {
+		if stage == nil || stage.cmd == nil || stage.cmd.Process == nil {
+			continue
+		}
+		count++
+		if err := send(stage.cmd.Process); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	if count == 0 && firstErr == nil {
+		return errors.New("process not started")
+	}
+	return firstErr
 }
