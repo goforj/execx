@@ -352,10 +352,8 @@ func (c *Cmd) OnStdout(fn func(string)) *Cmd {
 //
 // Example: stderr lines
 //
-//	var lines []string
 //	_, err := execx.Command("go", "env", "-badflag").
 //		OnStderr(func(line string) {
-//			lines = append(lines, line)
 //			fmt.Println(line)
 //		}).
 //		Run()

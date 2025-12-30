@@ -12,10 +12,8 @@ func main() {
 	// OnStderr registers a line callback for stderr.
 
 	// Example: stderr lines
-	var lines []string
 	_, err := execx.Command("go", "env", "-badflag").
 		OnStderr(func(line string) {
-			lines = append(lines, line)
 			fmt.Println(line)
 		}).
 		Run()

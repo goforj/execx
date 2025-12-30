@@ -841,10 +841,8 @@ fmt.Println(res.OK())
 OnStderr registers a line callback for stderr.
 
 ```go
-var lines []string
 _, err := execx.Command("go", "env", "-badflag").
 	OnStderr(func(line string) {
-		lines = append(lines, line)
 		fmt.Println(line)
 	}).
 	Run()
