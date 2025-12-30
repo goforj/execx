@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"github.com/goforj/execx"
+	"os"
 )
 
 func main() {
@@ -14,7 +15,7 @@ func main() {
 	// Example: interrupt
 	proc := execx.Command("sleep", "2").Start()
 	_ = proc.Interrupt()
-	res, err := proc.Wait()
-	fmt.Println(err != nil || res.ExitCode != 0)
+	res, _ := proc.Wait()
+	fmt.Println(res.IsSignal(os.Interrupt))
 	// #bool true
 }

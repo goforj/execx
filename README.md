@@ -530,7 +530,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)
 
 ### <a id="pdeathsig"></a>Pdeathsig
 
-Pdeathsig sets a parent-death signal on Linux.
+Pdeathsig is a no-op on Windows.
 
 _Example: pdeathsig_
 
@@ -555,7 +555,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").Pdeathsig(0) != nil)
 
 ### <a id="setpgid"></a>Setpgid
 
-Setpgid sets the process group ID behavior.
+Setpgid is a no-op on Windows.
 
 _Example: setpgid_
 
@@ -580,7 +580,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
 
 ### <a id="setsid"></a>Setsid
 
-Setsid sets the session ID behavior.
+Setsid is a no-op on Windows.
 
 _Example: setsid_
 
@@ -664,8 +664,8 @@ GracefulShutdown sends a signal and escalates to kill after the timeout.
 ```go
 proc := execx.Command("sleep", "2").Start()
 _ = proc.GracefulShutdown(os.Interrupt, 100*time.Millisecond)
-res, err := proc.Wait()
-fmt.Println(err != nil || res.ExitCode != 0)
+res, _ := proc.Wait()
+fmt.Println(res.IsSignal(os.Interrupt))
 // #bool true
 ```
 
@@ -676,8 +676,8 @@ Interrupt sends an interrupt signal to the process.
 ```go
 proc := execx.Command("sleep", "2").Start()
 _ = proc.Interrupt()
-res, err := proc.Wait()
-fmt.Println(err != nil || res.ExitCode != 0)
+res, _ := proc.Wait()
+fmt.Println(res.IsSignal(os.Interrupt))
 // #bool true
 ```
 
@@ -688,8 +688,8 @@ KillAfter terminates the process after the given duration.
 ```go
 proc := execx.Command("sleep", "2").Start()
 proc.KillAfter(100 * time.Millisecond)
-res, err := proc.Wait()
-fmt.Println(err != nil || res.ExitCode != 0)
+res, _ := proc.Wait()
+fmt.Println(res.ExitCode != 0)
 // #bool true
 ```
 
@@ -700,8 +700,8 @@ Send sends a signal to the process.
 ```go
 proc := execx.Command("sleep", "2").Start()
 _ = proc.Send(os.Interrupt)
-res, err := proc.Wait()
-fmt.Println(err != nil || res.ExitCode != 0)
+res, _ := proc.Wait()
+fmt.Println(res.IsSignal(os.Interrupt))
 // #bool true
 ```
 
@@ -712,8 +712,8 @@ Terminate kills the process immediately.
 ```go
 proc := execx.Command("sleep", "2").Start()
 _ = proc.Terminate()
-res, err := proc.Wait()
-fmt.Println(err != nil || res.ExitCode != 0)
+res, _ := proc.Wait()
+fmt.Println(res.ExitCode != 0)
 // #bool true
 ```
 

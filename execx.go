@@ -806,8 +806,8 @@ func (p *Process) Wait() (Result, error) {
 //
 //	proc := execx.Command("sleep", "2").Start()
 //	proc.KillAfter(100 * time.Millisecond)
-//	res, err := proc.Wait()
-//	fmt.Println(err != nil || res.ExitCode != 0)
+//	res, _ := proc.Wait()
+//	fmt.Println(res.ExitCode != 0)
 //	// #bool true
 func (p *Process) KillAfter(d time.Duration) {
 	p.mu.Lock()
@@ -827,8 +827,8 @@ func (p *Process) KillAfter(d time.Duration) {
 //
 //	proc := execx.Command("sleep", "2").Start()
 //	_ = proc.Send(os.Interrupt)
-//	res, err := proc.Wait()
-//	fmt.Println(err != nil || res.ExitCode != 0)
+//	res, _ := proc.Wait()
+//	fmt.Println(res.IsSignal(os.Interrupt))
 //	// #bool true
 func (p *Process) Send(sig os.Signal) error {
 	return p.signalAll(func(proc *os.Process) error {
@@ -843,8 +843,8 @@ func (p *Process) Send(sig os.Signal) error {
 //
 //	proc := execx.Command("sleep", "2").Start()
 //	_ = proc.Interrupt()
-//	res, err := proc.Wait()
-//	fmt.Println(err != nil || res.ExitCode != 0)
+//	res, _ := proc.Wait()
+//	fmt.Println(res.IsSignal(os.Interrupt))
 //	// #bool true
 func (p *Process) Interrupt() error {
 	return p.Send(os.Interrupt)
@@ -857,8 +857,8 @@ func (p *Process) Interrupt() error {
 //
 //	proc := execx.Command("sleep", "2").Start()
 //	_ = proc.Terminate()
-//	res, err := proc.Wait()
-//	fmt.Println(err != nil || res.ExitCode != 0)
+//	res, _ := proc.Wait()
+//	fmt.Println(res.ExitCode != 0)
 //	// #bool true
 func (p *Process) Terminate() error {
 	return p.signalAll(func(proc *os.Process) error {
@@ -873,8 +873,8 @@ func (p *Process) Terminate() error {
 //
 //	proc := execx.Command("sleep", "2").Start()
 //	_ = proc.GracefulShutdown(os.Interrupt, 100*time.Millisecond)
-//	res, err := proc.Wait()
-//	fmt.Println(err != nil || res.ExitCode != 0)
+//	res, _ := proc.Wait()
+//	fmt.Println(res.IsSignal(os.Interrupt))
 //	// #bool true
 func (p *Process) GracefulShutdown(sig os.Signal, timeout time.Duration) error {
 	if timeout <= 0 {
