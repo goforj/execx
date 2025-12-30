@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	// Setpgid is a no-op on Windows.
+	// Setpgid sets the process group ID behavior.
 
 	// Example: setpgid
 	fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)

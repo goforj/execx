@@ -494,7 +494,7 @@ fmt.Println(out)
 
 ### <a id="creationflags"></a>CreationFlags
 
-CreationFlags is a no-op on non-Windows platforms.
+CreationFlags sets Windows creation flags.
 
 _Example: creation flags_
 
@@ -512,7 +512,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").CreationFlags(0) != nil)
 
 ### <a id="hidewindow"></a>HideWindow
 
-HideWindow is a no-op on non-Windows platforms.
+HideWindow controls window visibility and sets CREATE_NO_WINDOW for console apps.
 
 _Example: hide window_
 
@@ -530,7 +530,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").HideWindow(true) != nil)
 
 ### <a id="pdeathsig"></a>Pdeathsig
 
-Pdeathsig sets a parent-death signal on Linux.
+Pdeathsig is a no-op on Windows.
 
 _Example: pdeathsig_
 
@@ -555,7 +555,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").Pdeathsig(0) != nil)
 
 ### <a id="setpgid"></a>Setpgid
 
-Setpgid sets the process group ID behavior.
+Setpgid is a no-op on Windows.
 
 _Example: setpgid_
 
@@ -580,7 +580,7 @@ fmt.Println(execx.Command("go", "env", "GOOS").Setpgid(true) != nil)
 
 ### <a id="setsid"></a>Setsid
 
-Setsid sets the session ID behavior.
+Setsid is a no-op on Windows.
 
 _Example: setsid_
 
@@ -680,8 +680,8 @@ Interrupt sends an interrupt signal to the process.
 proc := execx.Command("sleep", "2").Start()
 _ = proc.Interrupt()
 res, _ := proc.Wait()
-fmt.Println(res.IsSignal(os.Interrupt))
-// #bool true
+fmt.Printf("%+v", res)
+// {Stdout: Stderr: ExitCode:-1 Err:<nil> Duration:75.987ms signal:interrupt}
 ```
 
 ### <a id="killafter"></a>KillAfter
@@ -692,8 +692,8 @@ KillAfter terminates the process after the given duration.
 proc := execx.Command("sleep", "2").Start()
 proc.KillAfter(100 * time.Millisecond)
 res, _ := proc.Wait()
-fmt.Println(res.ExitCode != 0)
-// #bool true
+fmt.Printf("%+v", res)
+// {Stdout: Stderr: ExitCode:-1 Err:<nil> Duration:100.456ms signal:killed}
 ```
 
 ### <a id="send"></a>Send
@@ -704,8 +704,8 @@ Send sends a signal to the process.
 proc := execx.Command("sleep", "2").Start()
 _ = proc.Send(os.Interrupt)
 res, _ := proc.Wait()
-fmt.Println(res.IsSignal(os.Interrupt))
-// #bool true
+fmt.Printf("%+v", res)
+// {Stdout: Stderr: ExitCode:-1 Err:<nil> Duration:80.123ms signal:interrupt}
 ```
 
 ### <a id="terminate"></a>Terminate
@@ -716,8 +716,8 @@ Terminate kills the process immediately.
 proc := execx.Command("sleep", "2").Start()
 _ = proc.Terminate()
 res, _ := proc.Wait()
-fmt.Println(res.ExitCode != 0)
-// #bool true
+fmt.Printf("%+v", res)
+// {Stdout: Stderr: ExitCode:-1 Err:<nil> Duration:70.654ms signal:killed}
 ```
 
 ### <a id="wait"></a>Wait
@@ -727,8 +727,9 @@ Wait waits for the command to complete and returns the result and any error.
 ```go
 proc := execx.Command("go", "env", "GOOS").Start()
 res, _ := proc.Wait()
-fmt.Println(res.ExitCode == 0)
-// #bool true
+fmt.Printf("%+v", res)
+// {Stdout:darwin
+// Stderr: ExitCode:0 Err:<nil> Duration:1.234ms signal:<nil>}
 ```
 
 ## Results

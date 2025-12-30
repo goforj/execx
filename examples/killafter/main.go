@@ -16,6 +16,6 @@ func main() {
 	proc := execx.Command("sleep", "2").Start()
 	proc.KillAfter(100 * time.Millisecond)
 	res, _ := proc.Wait()
-	fmt.Println(res.ExitCode != 0)
-	// #bool true
+	fmt.Printf("%+v", res)
+	// {Stdout: Stderr: ExitCode:-1 Err:<nil> Duration:100.456ms signal:killed}
 }

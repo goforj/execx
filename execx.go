@@ -795,8 +795,9 @@ type Process struct {
 //
 //	proc := execx.Command("go", "env", "GOOS").Start()
 //	res, _ := proc.Wait()
-//	fmt.Println(res.ExitCode == 0)
-//	// #bool true
+//	fmt.Printf("%+v", res)
+//	// {Stdout:darwin
+//	// Stderr: ExitCode:0 Err:<nil> Duration:1.234ms signal:<nil>}
 func (p *Process) Wait() (Result, error) {
 	<-p.done
 	return p.result, p.result.Err
@@ -810,8 +811,8 @@ func (p *Process) Wait() (Result, error) {
 //	proc := execx.Command("sleep", "2").Start()
 //	proc.KillAfter(100 * time.Millisecond)
 //	res, _ := proc.Wait()
-//	fmt.Println(res.ExitCode != 0)
-//	// #bool true
+//	fmt.Printf("%+v", res)
+//	// {Stdout: Stderr: ExitCode:-1 Err:<nil> Duration:100.456ms signal:killed}
 func (p *Process) KillAfter(d time.Duration) {
 	p.mu.Lock()
 	if p.killTimer != nil {
@@ -831,8 +832,8 @@ func (p *Process) KillAfter(d time.Duration) {
 //	proc := execx.Command("sleep", "2").Start()
 //	_ = proc.Send(os.Interrupt)
 //	res, _ := proc.Wait()
-//	fmt.Println(res.IsSignal(os.Interrupt))
-//	// #bool true
+//	fmt.Printf("%+v", res)
+//	// {Stdout: Stderr: ExitCode:-1 Err:<nil> Duration:80.123ms signal:interrupt}
 func (p *Process) Send(sig os.Signal) error {
 	return p.signalAll(func(proc *os.Process) error {
 		return proc.Signal(sig)
@@ -847,8 +848,8 @@ func (p *Process) Send(sig os.Signal) error {
 //	proc := execx.Command("sleep", "2").Start()
 //	_ = proc.Interrupt()
 //	res, _ := proc.Wait()
-//	fmt.Println(res.IsSignal(os.Interrupt))
-//	// #bool true
+//	fmt.Printf("%+v", res)
+//	// {Stdout: Stderr: ExitCode:-1 Err:<nil> Duration:75.987ms signal:interrupt}
 func (p *Process) Interrupt() error {
 	return p.Send(os.Interrupt)
 }
@@ -861,8 +862,8 @@ func (p *Process) Interrupt() error {
 //	proc := execx.Command("sleep", "2").Start()
 //	_ = proc.Terminate()
 //	res, _ := proc.Wait()
-//	fmt.Println(res.ExitCode != 0)
-//	// #bool true
+//	fmt.Printf("%+v", res)
+//	// {Stdout: Stderr: ExitCode:-1 Err:<nil> Duration:70.654ms signal:killed}
 func (p *Process) Terminate() error {
 	return p.signalAll(func(proc *os.Process) error {
 		return proc.Kill()
