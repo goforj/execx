@@ -413,7 +413,7 @@ func TestStringAndShellEscaped(t *testing.T) {
 	if cmd.String() != "echo \"hello world\" it's" {
 		t.Fatalf("unexpected String(): %q", cmd.String())
 	}
-	if cmd.ShellEscaped() != "echo 'hello world' 'it'\\''s'" {
+	if cmd.ShellEscaped() != "echo 'hello world' \"it's\"" {
 		t.Fatalf("unexpected ShellEscaped(): %q", cmd.ShellEscaped())
 	}
 

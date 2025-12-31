@@ -3,13 +3,20 @@
 
 package main
 
-import "github.com/goforj/execx"
+import (
+	"fmt"
+	"github.com/goforj/execx"
+)
 
 func main() {
-	// ShadowPrint writes the shell-escaped command to stderr before and after execution.
+	// ShadowPrint configures shadow printing for this command chain.
 
 	// Example: shadow print
-	_, _ = execx.Command("printf", "hi").ShadowPrint().Run()
-	// execx > printf hi
-	// execx > printf hi (1ms)
+	_, _ = execx.Command("bash", "-c", `echo "hello world"`).
+		ShadowPrint().
+		OnStdout(func(line string) { fmt.Println(line) }).
+		Run()
+	// execx > bash -c 'echo "hello world"'
+	// hello world
+	// execx > bash -c 'echo "hello world"' (1ms)
 }

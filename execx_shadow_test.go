@@ -57,7 +57,7 @@ func TestShadowPrintDefault(t *testing.T) {
 
 func TestShadowPrintPrefix(t *testing.T) {
 	out := captureStderr(t, func() {
-		_, _ = Command("printf", "hi").ShadowPrintPrefix("run").Run()
+		_, _ = Command("printf", "hi").ShadowPrint(WithPrefix("run")).Run()
 	})
 	plain := stripANSI(out)
 	if !strings.Contains(plain, "run > printf hi") {
@@ -67,7 +67,7 @@ func TestShadowPrintPrefix(t *testing.T) {
 
 func TestShadowPrintOff(t *testing.T) {
 	out := captureStderr(t, func() {
-		_, _ = Command("printf", "hi").ShadowPrint().ShadowPrintOff().Run()
+		_, _ = Command("printf", "hi").ShadowPrint().ShadowOff().Run()
 	})
 	if strings.TrimSpace(out) != "" {
 		t.Fatalf("expected no output, got %q", out)
@@ -79,7 +79,7 @@ func TestShadowPrintMask(t *testing.T) {
 		mask := func(cmd string) string {
 			return strings.ReplaceAll(cmd, "secret", "***")
 		}
-		_, _ = Command("printf", "secret").ShadowPrintMask(mask).Run()
+		_, _ = Command("printf", "secret").ShadowPrint(WithMask(mask)).Run()
 	})
 	plain := stripANSI(out)
 	if !strings.Contains(plain, "printf ***") {
@@ -92,7 +92,7 @@ func TestShadowPrintFormatter(t *testing.T) {
 		formatter := func(ev ShadowEvent) string {
 			return "shadow:" + string(ev.Phase) + ":" + ev.RawCommand
 		}
-		_, _ = Command("printf", "hi").ShadowPrintFormatter(formatter).Run()
+		_, _ = Command("printf", "hi").ShadowPrint(WithFormatter(formatter)).Run()
 	})
 	lines := strings.FieldsFunc(strings.TrimSpace(out), func(r rune) bool {
 		return r == '\n' || r == '\r'
@@ -113,7 +113,7 @@ func TestShadowPrintFormatterEmpty(t *testing.T) {
 		formatter := func(ev ShadowEvent) string {
 			return ""
 		}
-		_, _ = Command("printf", "hi").ShadowPrintFormatter(formatter).Run()
+		_, _ = Command("printf", "hi").ShadowPrint(WithFormatter(formatter)).Run()
 	})
 	if strings.TrimSpace(out) != "" {
 		t.Fatalf("expected no output, got %q", out)
@@ -135,6 +135,56 @@ func TestShadowPrintAsync(t *testing.T) {
 	plain := stripANSI(out)
 	if !strings.Contains(plain, "(async)") {
 		t.Fatalf("expected async marker, got %q", plain)
+	}
+}
+
+func TestShadowOffOnPreservesConfig(t *testing.T) {
+	out := captureStderr(t, func() {
+		cmd := Command("printf", "hi").ShadowPrint(WithPrefix("run"))
+		cmd.ShadowOff()
+		_, _ = cmd.ShadowOn().Run()
+	})
+	plain := stripANSI(out)
+	if !strings.Contains(plain, "run > printf hi") {
+		t.Fatalf("expected preserved prefix, got %q", plain)
+	}
+}
+
+func TestShadowOnDefaultConfig(t *testing.T) {
+	out := captureStderr(t, func() {
+		cmd := Command("printf", "hi")
+		cmd.ShadowOff()
+		_, _ = cmd.ShadowOn().Run()
+	})
+	plain := stripANSI(out)
+	if !strings.Contains(plain, "execx > printf hi") {
+		t.Fatalf("expected default prefix, got %q", plain)
+	}
+}
+
+func TestShadowPrintMaskWithFormatter(t *testing.T) {
+	out := captureStderr(t, func() {
+		mask := func(cmd string) string {
+			return strings.ReplaceAll(cmd, "secret", "***")
+		}
+		formatter := func(ev ShadowEvent) string {
+			return ev.Command + "|" + ev.RawCommand
+		}
+		_, _ = Command("printf", "secret").ShadowPrint(WithMask(mask), WithFormatter(formatter)).Run()
+	})
+	plain := stripANSI(strings.TrimSpace(out))
+	if !strings.HasPrefix(plain, "printf ***|printf secret") {
+		t.Fatalf("expected masked and raw values, got %q", plain)
+	}
+}
+
+func TestShadowPrintEmptyPrefix(t *testing.T) {
+	out := captureStderr(t, func() {
+		_, _ = Command("printf", "hi").ShadowPrint(WithPrefix("")).Run()
+	})
+	plain := stripANSI(out)
+	if !strings.Contains(plain, "execx > printf hi") {
+		t.Fatalf("expected default prefix, got %q", plain)
 	}
 }
 

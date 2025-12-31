@@ -14,5 +14,5 @@ func main() {
 	// Example: shell escaped
 	cmd := execx.Command("echo", "hello world", "it's")
 	fmt.Println(cmd.ShellEscaped())
-	// #string echo 'hello world' 'it'\\''s'
+	// #string echo 'hello world' "it's"
 }

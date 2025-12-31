@@ -9,13 +9,13 @@ import (
 )
 
 func main() {
-	// ShadowPrintMask sets a command masker for ShadowPrint output.
+	// WithMask applies a masker to the shadow-printed command string.
 
-	// Example: shadow print mask
+	// Example: shadow mask
 	mask := func(cmd string) string {
 		return strings.ReplaceAll(cmd, "secret", "***")
 	}
-	_, _ = execx.Command("printf", "secret").ShadowPrintMask(mask).Run()
+	_, _ = execx.Command("printf", "secret").ShadowPrint(execx.WithMask(mask)).Run()
 	// execx > printf ***
 	// execx > printf *** (1ms)
 }

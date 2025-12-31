@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -75,10 +76,8 @@ type Cmd struct {
 	root     *Cmd
 	pipeMode pipeMode
 
-	shadowPrint     bool
-	shadowPrefix    string
-	shadowFormatter func(ShadowEvent) string
-	shadowMask      func(string) string
+	shadowPrint  bool
+	shadowConfig shadowConfig
 }
 
 // Arg appends arguments to the command.
@@ -522,7 +521,7 @@ func (c *Cmd) String() string {
 //
 //	cmd := execx.Command("echo", "hello world", "it's")
 //	fmt.Println(cmd.ShellEscaped())
-//	// #string echo 'hello world' 'it'\\''s'
+//	// #string echo 'hello world' "it's"
 func (c *Cmd) ShellEscaped() string {
 	parts := make([]string, 0, len(c.args)+1)
 	parts = append(parts, shellEscape(c.name))
@@ -532,80 +531,106 @@ func (c *Cmd) ShellEscaped() string {
 	return strings.Join(parts, " ")
 }
 
-// ShadowPrint writes the shell-escaped command to stderr before and after execution.
-// @group User Feedback
+// ShadowPrint configures shadow printing for this command chain.
+// @group Shadow Print
 //
 // Example: shadow print
 //
-//	_, _ = execx.Command("printf", "hi").ShadowPrint().Run()
-//	// execx > printf hi
-//	// execx > printf hi (1ms)
-func (c *Cmd) ShadowPrint() *Cmd {
-	c.rootCmd().shadowPrint = true
+//	_, _ = execx.Command("bash", "-c", `echo "hello world"`).
+//		ShadowPrint().
+//		OnStdout(func(line string) { fmt.Println(line) }).
+//		Run()
+//	// execx > bash -c 'echo "hello world"'
+//	// hello world
+//	// execx > bash -c 'echo "hello world"' (1ms)
+func (c *Cmd) ShadowPrint(opts ...ShadowOption) *Cmd {
+	root := c.rootCmd()
+	root.shadowConfig = defaultShadowConfig()
+	for _, opt := range opts {
+		opt(&root.shadowConfig)
+	}
+	root.shadowPrint = true
 	return c
 }
 
-// ShadowPrintOff disables shadow printing for this command chain.
-// @group User Feedback
+// ShadowOff disables shadow printing for this command chain, preserving configuration.
+// @group Shadow Print
 //
-// Example: shadow print off
+// Example: shadow off
 //
-//	_, _ = execx.Command("printf", "hi").ShadowPrint().ShadowPrintOff().Run()
-func (c *Cmd) ShadowPrintOff() *Cmd {
+//	_, _ = execx.Command("printf", "hi").ShadowPrint().ShadowOff().Run()
+func (c *Cmd) ShadowOff() *Cmd {
 	root := c.rootCmd()
 	root.shadowPrint = false
 	return c
 }
 
-// ShadowPrintPrefix sets the prefix used by ShadowPrint.
-// @group User Feedback
+// ShadowOn enables shadow printing using the previously configured options.
+// @group Shadow Print
 //
-// Example: shadow print prefix
+// Example: shadow on
 //
-//	_, _ = execx.Command("printf", "hi").ShadowPrintPrefix("run").Run()
+//	cmd := execx.Command("printf", "hi").
+//		ShadowPrint(execx.WithPrefix("run"))
+//	cmd.ShadowOff()
+//	_, _ = cmd.ShadowOn().Run()
 //	// run > printf hi
 //	// run > printf hi (1ms)
-func (c *Cmd) ShadowPrintPrefix(prefix string) *Cmd {
+func (c *Cmd) ShadowOn() *Cmd {
 	root := c.rootCmd()
+	if root.shadowConfig.prefix == "" {
+		root.shadowConfig = defaultShadowConfig()
+	}
 	root.shadowPrint = true
-	root.shadowPrefix = prefix
 	return c
 }
 
-// ShadowPrintMask sets a command masker for ShadowPrint output.
-// @group User Feedback
+// WithPrefix sets the shadow print prefix.
+// @group Shadow Print
 //
-// Example: shadow print mask
+// Example: shadow prefix
+//
+//	_, _ = execx.Command("printf", "hi").ShadowPrint(execx.WithPrefix("run")).Run()
+//	// run > printf hi
+//	// run > printf hi (1ms)
+func WithPrefix(prefix string) ShadowOption {
+	return func(cfg *shadowConfig) {
+		cfg.prefix = prefix
+	}
+}
+
+// WithMask applies a masker to the shadow-printed command string.
+// @group Shadow Print
+//
+// Example: shadow mask
 //
 //	mask := func(cmd string) string {
 //		return strings.ReplaceAll(cmd, "secret", "***")
 //	}
-//	_, _ = execx.Command("printf", "secret").ShadowPrintMask(mask).Run()
+//	_, _ = execx.Command("printf", "secret").ShadowPrint(execx.WithMask(mask)).Run()
 //	// execx > printf ***
 //	// execx > printf *** (1ms)
-func (c *Cmd) ShadowPrintMask(fn func(string) string) *Cmd {
-	root := c.rootCmd()
-	root.shadowPrint = true
-	root.shadowMask = fn
-	return c
+func WithMask(fn func(string) string) ShadowOption {
+	return func(cfg *shadowConfig) {
+		cfg.mask = fn
+	}
 }
 
-// ShadowPrintFormatter sets a formatter for ShadowPrint output.
-// @group User Feedback
+// WithFormatter sets a formatter for ShadowPrint output.
+// @group Shadow Print
 //
-// Example: shadow print formatter
+// Example: shadow formatter
 //
 //	formatter := func(ev execx.ShadowEvent) string {
 //		return fmt.Sprintf("shadow: %s %s", ev.Phase, ev.Command)
 //	}
-//	_, _ = execx.Command("printf", "hi").ShadowPrintFormatter(formatter).Run()
+//	_, _ = execx.Command("printf", "hi").ShadowPrint(execx.WithFormatter(formatter)).Run()
 //	// shadow: before printf hi
 //	// shadow: after printf hi
-func (c *Cmd) ShadowPrintFormatter(fn func(ShadowEvent) string) *Cmd {
-	root := c.rootCmd()
-	root.shadowPrint = true
-	root.shadowFormatter = fn
-	return c
+func WithFormatter(fn func(ShadowEvent) string) ShadowOption {
+	return func(cfg *shadowConfig) {
+		cfg.formatter = fn
+	}
 }
 
 // Run executes the command and returns the result and any error.
@@ -854,15 +879,19 @@ func firstResultErr(results []Result) error {
 	return nil
 }
 
+var shellEscapePattern = regexp.MustCompile(`[^\w@%+=:,./-]`)
+
 func shellEscape(arg string) string {
 	if arg == "" {
 		return "''"
 	}
-	needsQuote := strings.ContainsAny(arg, " \t\n\r'\"\\$`!")
-	if !needsQuote {
-		return arg
+	if shellEscapePattern.MatchString(arg) {
+		if strings.Contains(arg, "'") && !strings.ContainsAny(arg, "\\\"$`\n\r\t") {
+			return `"` + arg + `"`
+		}
+		return "'" + strings.ReplaceAll(arg, "'", "'\"'\"'") + "'"
 	}
-	return "'" + strings.ReplaceAll(arg, "'", "'\\''") + "'"
+	return arg
 }
 
 type shadowContext struct {
@@ -886,6 +915,19 @@ type ShadowEvent struct {
 	Phase      ShadowPhase
 	Duration   time.Duration
 	Async      bool
+}
+
+// ShadowOption configures ShadowPrint behavior.
+type ShadowOption func(*shadowConfig)
+
+type shadowConfig struct {
+	prefix    string
+	mask      func(string) string
+	formatter func(ShadowEvent) string
+}
+
+func defaultShadowConfig() shadowConfig {
+	return shadowConfig{prefix: "execx"}
 }
 
 func (c *Cmd) shadowPrintStart(async bool) *shadowContext {
@@ -925,8 +967,8 @@ func shadowPrintLine(cmd *Cmd, phase ShadowPhase, duration time.Duration, async 
 	}
 	rawCommand := cmd.shadowCommand()
 	commandLine := rawCommand
-	if cmd.shadowMask != nil {
-		commandLine = cmd.shadowMask(commandLine)
+	if cmd.shadowConfig.mask != nil {
+		commandLine = cmd.shadowConfig.mask(commandLine)
 	}
 	event := ShadowEvent{
 		Command:    commandLine,
@@ -935,14 +977,14 @@ func shadowPrintLine(cmd *Cmd, phase ShadowPhase, duration time.Duration, async 
 		Duration:   duration,
 		Async:      async,
 	}
-	if cmd.shadowFormatter != nil {
-		line := cmd.shadowFormatter(event)
+	if cmd.shadowConfig.formatter != nil {
+		line := cmd.shadowConfig.formatter(event)
 		if line != "" {
 			fmt.Fprintln(os.Stderr, line)
 		}
 		return
 	}
-	prefix := cmd.shadowPrefix
+	prefix := cmd.shadowConfig.prefix
 	if prefix == "" {
 		prefix = "execx"
 	}
