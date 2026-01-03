@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/github/v/tag/goforj/execx?label=version&sort=semver" alt="Latest tag"> 
     <a href="https://codecov.io/gh/goforj/execx" ><img src="https://codecov.io/github/goforj/execx/graph/badge.svg?token=RBB8T6WQ0U"/></a>
 <!-- test-count:embed:start -->
-    <img src="https://img.shields.io/badge/tests-119-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-141-brightgreen" alt="Tests">
 <!-- test-count:embed:end -->
     <a href="https://goreportcard.com/report/github.com/goforj/execx"><img src="https://goreportcard.com/badge/github.com/goforj/execx" alt="Go Report Card"></a>
 </p>
@@ -167,6 +167,21 @@ res, err := execx.
     // Duration: 10.123456ms
 ```
 
+## Error handling model
+
+execx returns two error surfaces:
+
+1) `err` (from `Run`, `Output`, `CombinedOutput`, `Wait`, etc) only reports execution failures:
+   - start failures (binary not found, not executable, OS start error)
+   - context cancellations or timeouts (`WithContext`, `WithTimeout`, `WithDeadline`)
+   - pipeline failures based on `PipeStrict` / `PipeBestEffort`
+
+2) `Result.Err` mirrors `err` for convenience; it is not for exit status.
+
+Exit status is always reported via `Result.ExitCode`, even on non-zero exits. A non-zero exit does not automatically produce `err`.
+
+Use `err` when you want to handle execution failures, and check `Result.ExitCode` (or `Result.OK()` / `Result.IsExitCode`) when you care about command success.
+
 ## Non-goals and design principles
 
 Design principles:
@@ -194,6 +209,7 @@ All public APIs are covered by runnable examples under `./examples`, and the tes
 | **Construction** | [Command](#command) |
 | **Context** | [WithContext](#withcontext) [WithDeadline](#withdeadline) [WithTimeout](#withtimeout) |
 | **Debugging** | [Args](#args) [ShellEscaped](#shellescaped) [String](#string) |
+| **Decoding** | [Decode](#decode) [DecodeJSON](#decodejson) [DecodeWith](#decodewith) [DecodeYAML](#decodeyaml) [FromCombined](#fromcombined) [FromStderr](#fromstderr) [FromStdout](#fromstdout) [Into](#into) [Trim](#trim) |
 | **Environment** | [Env](#env) [EnvAppend](#envappend) [EnvInherit](#envinherit) [EnvList](#envlist) [EnvOnly](#envonly) |
 | **Errors** | [Error](#error) [Unwrap](#unwrap) |
 | **Execution** | [CombinedOutput](#combinedoutput) [Output](#output) [OutputBytes](#outputbytes) [OutputTrimmed](#outputtrimmed) [Run](#run) [Start](#start) |
@@ -297,6 +313,170 @@ String returns a human-readable representation of the command.
 cmd := execx.Command("echo", "hello world", "it's")
 fmt.Println(cmd.String())
 // #string echo "hello world" it's
+```
+
+## Decoding
+
+### <a id="decode"></a>Decode
+
+Decode configures a custom decoder for this command.
+Decoding reads from stdout by default; use FromStdout, FromStderr, or FromCombined to select a source.
+
+```go
+type payload struct {
+	Name string
+}
+decoder := execx.DecoderFunc(func(data []byte, dst any) error {
+	out, ok := dst.(*payload)
+	if !ok {
+		return fmt.Errorf("expected *payload")
+	}
+	_, val, ok := strings.Cut(string(data), "=")
+	if !ok {
+		return fmt.Errorf("invalid payload")
+	}
+	out.Name = val
+	return nil
+})
+var out payload
+_ = execx.Command("printf", "name=gopher").
+	Decode(decoder).
+	Into(&out)
+fmt.Println(out.Name)
+// #string gopher
+```
+
+### <a id="decodejson"></a>DecodeJSON
+
+DecodeJSON configures JSON decoding for this command.
+Decoding reads from stdout by default; use FromStdout, FromStderr, or FromCombined to select a source.
+
+```go
+type payload struct {
+	Name string `json:"name"`
+}
+var out payload
+_ = execx.Command("printf", `{"name":"gopher"}`).
+	DecodeJSON().
+	Into(&out)
+fmt.Println(out.Name)
+// #string gopher
+```
+
+### <a id="decodewith"></a>DecodeWith
+
+DecodeWith executes the command and decodes stdout into dst.
+
+```go
+type payload struct {
+	Name string `json:"name"`
+}
+var out payload
+_ = execx.Command("printf", `{"name":"gopher"}`).
+	DecodeWith(&out, execx.DecoderFunc(json.Unmarshal))
+fmt.Println(out.Name)
+// #string gopher
+```
+
+### <a id="decodeyaml"></a>DecodeYAML
+
+DecodeYAML configures YAML decoding for this command.
+Decoding reads from stdout by default; use FromStdout, FromStderr, or FromCombined to select a source.
+
+```go
+type payload struct {
+	Name string `yaml:"name"`
+}
+var out payload
+_ = execx.Command("printf", "name: gopher").
+	DecodeYAML().
+	Into(&out)
+fmt.Println(out.Name)
+// #string gopher
+```
+
+### <a id="fromcombined"></a>FromCombined
+
+FromCombined decodes from combined stdout+stderr.
+
+```go
+type payload struct {
+	Name string `json:"name"`
+}
+var out payload
+_ = execx.Command("sh", "-c", `printf '{"name":"gopher"}'`).
+	DecodeJSON().
+	FromCombined().
+	Into(&out)
+fmt.Println(out.Name)
+// #string gopher
+```
+
+### <a id="fromstderr"></a>FromStderr
+
+FromStderr decodes from stderr.
+
+```go
+type payload struct {
+	Name string `json:"name"`
+}
+var out payload
+_ = execx.Command("sh", "-c", `printf '{"name":"gopher"}' 1>&2`).
+	DecodeJSON().
+	FromStderr().
+	Into(&out)
+fmt.Println(out.Name)
+// #string gopher
+```
+
+### <a id="fromstdout"></a>FromStdout
+
+FromStdout decodes from stdout (default).
+
+```go
+type payload struct {
+	Name string `json:"name"`
+}
+var out payload
+_ = execx.Command("printf", `{"name":"gopher"}`).
+	DecodeJSON().
+	FromStdout().
+	Into(&out)
+fmt.Println(out.Name)
+// #string gopher
+```
+
+### <a id="into"></a>Into
+
+Into executes the command and decodes into dst.
+
+```go
+type payload struct {
+	Name string `json:"name"`
+}
+var out payload
+_ = execx.Command("printf", `{"name":"gopher"}`).
+	DecodeJSON().
+	Into(&out)
+fmt.Println(out.Name)
+// #string gopher
+```
+
+### <a id="trim"></a>Trim
+
+Trim trims whitespace before decoding.
+
+```go
+type payload struct {
+	Name string `json:"name"`
+}
+var out payload
+_ = execx.Command("printf", "  {\"name\":\"gopher\"}  ").
+	DecodeJSON().
+	Trim().
+	Into(&out)
+fmt.Println(out.Name)
+// #string gopher
 ```
 
 ## Environment
@@ -497,7 +677,7 @@ fmt.Println(out)
 
 ### <a id="creationflags"></a>CreationFlags
 
-CreationFlags sets Windows process creation flags (for example, create a new process group).
+CreationFlags is a no-op on non-Windows platforms; on Windows it sets process creation flags.
 
 ```go
 out, _ := execx.Command("printf", "ok").CreationFlags(execx.CreateNewProcessGroup).Output()
@@ -507,7 +687,7 @@ fmt.Print(out)
 
 ### <a id="hidewindow"></a>HideWindow
 
-HideWindow hides console windows and sets CREATE_NO_WINDOW for console apps.
+HideWindow is a no-op on non-Windows platforms; on Windows it hides console windows.
 
 ```go
 out, _ := execx.Command("printf", "ok").HideWindow(true).Output()
@@ -517,7 +697,7 @@ fmt.Print(out)
 
 ### <a id="pdeathsig"></a>Pdeathsig
 
-Pdeathsig is a no-op on Windows; on Linux it signals the child when the parent exits.
+Pdeathsig sets a parent-death signal on Linux so the child is signaled if the parent exits.
 
 ```go
 out, _ := execx.Command("printf", "ok").Pdeathsig(syscall.SIGTERM).Output()
@@ -527,7 +707,7 @@ fmt.Print(out)
 
 ### <a id="setpgid"></a>Setpgid
 
-Setpgid is a no-op on Windows; on Unix it places the child in a new process group.
+Setpgid places the child in a new process group for group signals.
 
 ```go
 out, _ := execx.Command("printf", "ok").Setpgid(true).Output()
@@ -537,7 +717,7 @@ fmt.Print(out)
 
 ### <a id="setsid"></a>Setsid
 
-Setsid is a no-op on Windows; on Unix it starts a new session.
+Setsid starts the child in a new session, detaching it from the terminal.
 
 ```go
 out, _ := execx.Command("printf", "ok").Setsid(true).Output()
