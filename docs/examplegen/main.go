@@ -382,6 +382,9 @@ func writeMain(base string, fd *FuncDoc, importPath string) error {
 		if strings.Contains(ex.Code, "fmt.") {
 			imports["fmt"] = true
 		}
+		if strings.Contains(ex.Code, "json.") {
+			imports["encoding/json"] = true
+		}
 		if strings.Contains(ex.Code, "strings.") {
 			imports["strings"] = true
 		}

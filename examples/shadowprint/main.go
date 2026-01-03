@@ -13,7 +13,7 @@ func main() {
 	// ShadowPrint configures shadow printing for this command chain.
 
 	// Example: shadow print
-	_, _ = execx.Command("echo", "hello world").
+	_, _ = execx.Command("bash", "-c", `echo "hello world"`).
 		ShadowPrint().
 		OnStdout(func(line string) { fmt.Println(line) }).
 		Run()
@@ -28,7 +28,7 @@ func main() {
 	formatter := func(ev execx.ShadowEvent) string {
 		return fmt.Sprintf("shadow: %s %s", ev.Phase, ev.Command)
 	}
-	_, _ = execx.Command("echo", "hello world").
+	_, _ = execx.Command("bash", "-c", `echo "hello world"`).
 		ShadowPrint(
 			execx.WithPrefix("execx"),
 			execx.WithMask(mask),
