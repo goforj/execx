@@ -697,7 +697,7 @@ fmt.Print(out)
 
 ### <a id="pdeathsig"></a>Pdeathsig
 
-Pdeathsig is a no-op on Windows; on Linux it signals the child when the parent exits.
+Pdeathsig sets a parent-death signal on Linux so the child is signaled if the parent exits.
 
 ```go
 out, _ := execx.Command("printf", "ok").Pdeathsig(syscall.SIGTERM).Output()
@@ -707,7 +707,7 @@ fmt.Print(out)
 
 ### <a id="setpgid"></a>Setpgid
 
-Setpgid is a no-op on Windows; on Unix it places the child in a new process group.
+Setpgid places the child in a new process group for group signals.
 
 ```go
 out, _ := execx.Command("printf", "ok").Setpgid(true).Output()
@@ -717,7 +717,7 @@ fmt.Print(out)
 
 ### <a id="setsid"></a>Setsid
 
-Setsid is a no-op on Windows; on Unix it starts a new session.
+Setsid starts the child in a new session, detaching it from the terminal.
 
 ```go
 out, _ := execx.Command("printf", "ok").Setsid(true).Output()
