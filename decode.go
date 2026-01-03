@@ -43,6 +43,7 @@ type DecodeChain struct {
 }
 
 // Decode configures a custom decoder for this command.
+// Decoding reads from stdout by default; use FromStdout, FromStderr, or FromCombined to select a source.
 // @group Decoding
 //
 // Example: decode custom
@@ -82,6 +83,7 @@ func (f DecoderFunc) Decode(data []byte, dst any) error {
 }
 
 // DecodeJSON configures JSON decoding for this command.
+// Decoding reads from stdout by default; use FromStdout, FromStderr, or FromCombined to select a source.
 // @group Decoding
 //
 // Example: decode json
@@ -100,6 +102,7 @@ func (c *Cmd) DecodeJSON() *DecodeChain {
 }
 
 // DecodeYAML configures YAML decoding for this command.
+// Decoding reads from stdout by default; use FromStdout, FromStderr, or FromCombined to select a source.
 // @group Decoding
 //
 // Example: decode yaml

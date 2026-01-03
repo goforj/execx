@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	// CreationFlags is a no-op on non-Windows platforms; on Windows it sets process creation flags.
+	// CreationFlags sets Windows process creation flags (for example, create a new process group).
 
 	// Example: creation flags
 	out, _ := execx.Command("printf", "ok").CreationFlags(execx.CreateNewProcessGroup).Output()

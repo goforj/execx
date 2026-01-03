@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/github/v/tag/goforj/execx?label=version&sort=semver" alt="Latest tag"> 
     <a href="https://codecov.io/gh/goforj/execx" ><img src="https://codecov.io/github/goforj/execx/graph/badge.svg?token=RBB8T6WQ0U"/></a>
 <!-- test-count:embed:start -->
-    <img src="https://img.shields.io/badge/tests-139-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-141-brightgreen" alt="Tests">
 <!-- test-count:embed:end -->
     <a href="https://goreportcard.com/report/github.com/goforj/execx"><img src="https://goreportcard.com/badge/github.com/goforj/execx" alt="Go Report Card"></a>
 </p>
@@ -209,7 +209,7 @@ All public APIs are covered by runnable examples under `./examples`, and the tes
 | **Construction** | [Command](#command) |
 | **Context** | [WithContext](#withcontext) [WithDeadline](#withdeadline) [WithTimeout](#withtimeout) |
 | **Debugging** | [Args](#args) [ShellEscaped](#shellescaped) [String](#string) |
-| **Decoding** | [Decode](#decode) [DecodeJSON](#decodejson) [DecodeYAML](#decodeyaml) [FromCombined](#fromcombined) [FromStderr](#fromstderr) [FromStdout](#fromstdout) [Into](#into) [DecodeWith](#decodewith) [Trim](#trim) |
+| **Decoding** | [Decode](#decode) [DecodeJSON](#decodejson) [DecodeWith](#decodewith) [DecodeYAML](#decodeyaml) [FromCombined](#fromcombined) [FromStderr](#fromstderr) [FromStdout](#fromstdout) [Into](#into) [Trim](#trim) |
 | **Environment** | [Env](#env) [EnvAppend](#envappend) [EnvInherit](#envinherit) [EnvList](#envlist) [EnvOnly](#envonly) |
 | **Errors** | [Error](#error) [Unwrap](#unwrap) |
 | **Execution** | [CombinedOutput](#combinedoutput) [Output](#output) [OutputBytes](#outputbytes) [OutputTrimmed](#outputtrimmed) [Run](#run) [Start](#start) |
@@ -320,6 +320,7 @@ fmt.Println(cmd.String())
 ### <a id="decode"></a>Decode
 
 Decode configures a custom decoder for this command.
+Decoding reads from stdout by default; use FromStdout, FromStderr, or FromCombined to select a source.
 
 ```go
 type payload struct {
@@ -348,6 +349,7 @@ fmt.Println(out.Name)
 ### <a id="decodejson"></a>DecodeJSON
 
 DecodeJSON configures JSON decoding for this command.
+Decoding reads from stdout by default; use FromStdout, FromStderr, or FromCombined to select a source.
 
 ```go
 type payload struct {
@@ -361,9 +363,25 @@ fmt.Println(out.Name)
 // #string gopher
 ```
 
+### <a id="decodewith"></a>DecodeWith
+
+DecodeWith executes the command and decodes stdout into dst.
+
+```go
+type payload struct {
+	Name string `json:"name"`
+}
+var out payload
+_ = execx.Command("printf", `{"name":"gopher"}`).
+	DecodeWith(&out, execx.DecoderFunc(json.Unmarshal))
+fmt.Println(out.Name)
+// #string gopher
+```
+
 ### <a id="decodeyaml"></a>DecodeYAML
 
 DecodeYAML configures YAML decoding for this command.
+Decoding reads from stdout by default; use FromStdout, FromStderr, or FromCombined to select a source.
 
 ```go
 type payload struct {
@@ -452,21 +470,6 @@ var out payload
 _ = execx.Command("printf", `{"name":"gopher"}`).
 	DecodeJSON().
 	Into(&out)
-fmt.Println(out.Name)
-// #string gopher
-```
-
-### <a id="decodewith"></a>DecodeWith
-
-DecodeWith executes the command and decodes stdout into dst.
-
-```go
-type payload struct {
-	Name string `json:"name"`
-}
-var out payload
-_ = execx.Command("printf", `{"name":"gopher"}`).
-	DecodeWith(&out, execx.DecoderFunc(json.Unmarshal))
 fmt.Println(out.Name)
 // #string gopher
 ```

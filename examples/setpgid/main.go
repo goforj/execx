@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	// Setpgid places the child in a new process group for group signals.
+	// Setpgid is a no-op on Windows; on Unix it places the child in a new process group.
 
 	// Example: setpgid
 	out, _ := execx.Command("printf", "ok").Setpgid(true).Output()

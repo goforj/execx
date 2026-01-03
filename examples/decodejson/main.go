@@ -10,6 +10,7 @@ import (
 
 func main() {
 	// DecodeJSON configures JSON decoding for this command.
+	// Decoding reads from stdout by default; use FromStdout, FromStderr, or FromCombined to select a source.
 
 	// Example: decode json
 	type payload struct {
