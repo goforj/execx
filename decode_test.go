@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"runtime"
-	"strings"
 	"testing"
 )
 
@@ -134,24 +133,9 @@ func TestDecodeStderr(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("stderr output test uses sh")
 	}
-	type payload struct {
-		Name string
-	}
-	decoder := DecoderFunc(func(data []byte, dst any) error {
-		out, ok := dst.(*payload)
-		if !ok {
-			return errors.New("expected *payload")
-		}
-		_, val, ok := strings.Cut(string(data), "=")
-		if !ok {
-			return errors.New("invalid payload")
-		}
-		out.Name = val
-		return nil
-	})
-	var out payload
-	err := Command("sh", "-c", "printf 'name=gopher' 1>&2").
-		Decode(decoder).
+	var out testPayload
+	err := Command("sh", "-c", `printf '{"name":"gopher"}' 1>&2`).
+		DecodeJSON().
 		FromStderr().
 		Into(&out)
 	if err != nil {

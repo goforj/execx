@@ -418,23 +418,11 @@ FromStderr decodes from stderr.
 
 ```go
 type payload struct {
-	Name string
+	Name string `json:"name"`
 }
-decoder := execx.DecoderFunc(func(data []byte, dst any) error {
-	out, ok := dst.(*payload)
-	if !ok {
-		return fmt.Errorf("expected *payload")
-	}
-	_, val, ok := strings.Cut(string(data), "=")
-	if !ok {
-		return fmt.Errorf("invalid payload")
-	}
-	out.Name = val
-	return nil
-})
 var out payload
-_ = execx.Command("sh", "-c", "printf 'name=gopher' 1>&2").
-	Decode(decoder).
+_ = execx.Command("sh", "-c", `printf '{"name":"gopher"}' 1>&2`).
+	DecodeJSON().
 	FromStderr().
 	Into(&out)
 fmt.Println(out.Name)
@@ -709,7 +697,7 @@ fmt.Print(out)
 
 ### <a id="pdeathsig"></a>Pdeathsig
 
-Pdeathsig sets a parent-death signal on Linux so the child is signaled if the parent exits.
+Pdeathsig is a no-op on Windows; on Linux it signals the child when the parent exits.
 
 ```go
 out, _ := execx.Command("printf", "ok").Pdeathsig(syscall.SIGTERM).Output()
@@ -719,7 +707,7 @@ fmt.Print(out)
 
 ### <a id="setpgid"></a>Setpgid
 
-Setpgid places the child in a new process group for group signals.
+Setpgid is a no-op on Windows; on Unix it places the child in a new process group.
 
 ```go
 out, _ := execx.Command("printf", "ok").Setpgid(true).Output()
@@ -729,7 +717,7 @@ fmt.Print(out)
 
 ### <a id="setsid"></a>Setsid
 
-Setsid starts the child in a new session, detaching it from the terminal.
+Setsid is a no-op on Windows; on Unix it starts a new session.
 
 ```go
 out, _ := execx.Command("printf", "ok").Setsid(true).Output()

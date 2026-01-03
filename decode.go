@@ -146,23 +146,11 @@ func (d *DecodeChain) FromStdout() *DecodeChain {
 // Example: decode from stderr
 //
 //	type payload struct {
-//		Name string
+//		Name string `json:"name"`
 //	}
-//	decoder := execx.DecoderFunc(func(data []byte, dst any) error {
-//		out, ok := dst.(*payload)
-//		if !ok {
-//			return fmt.Errorf("expected *payload")
-//		}
-//		_, val, ok := strings.Cut(string(data), "=")
-//		if !ok {
-//			return fmt.Errorf("invalid payload")
-//		}
-//		out.Name = val
-//		return nil
-//	})
 //	var out payload
-//	_ = execx.Command("sh", "-c", "printf 'name=gopher' 1>&2").
-//		Decode(decoder).
+//	_ = execx.Command("sh", "-c", `printf '{"name":"gopher"}' 1>&2`).
+//		DecodeJSON().
 //		FromStderr().
 //		Into(&out)
 //	fmt.Println(out.Name)

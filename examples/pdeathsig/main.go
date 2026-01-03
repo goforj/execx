@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	// Pdeathsig is a no-op on Windows; on Linux it signals the child when the parent exits.
+	// Pdeathsig is a no-op on non-Linux Unix platforms; on Linux it signals the child when the parent exits.
 
 	// Example: pdeathsig
 	out, _ := execx.Command("printf", "ok").Pdeathsig(syscall.SIGTERM).Output()
