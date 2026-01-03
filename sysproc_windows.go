@@ -16,7 +16,7 @@ func (c *Cmd) Setsid(_ bool) *Cmd {
 	return c
 }
 
-// Pdeathsig is a no-op on Windows; on Linux it signals the child when the parent exits.
+// Pdeathsig is a no-op on non-Linux platforms; on Linux it signals the child when the parent exits.
 // @group OS Controls
 func (c *Cmd) Pdeathsig(_ syscall.Signal) *Cmd {
 	return c

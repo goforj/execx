@@ -32,7 +32,7 @@ func (c *Cmd) Setsid(on bool) *Cmd {
 	return c
 }
 
-// Pdeathsig sets a parent-death signal on Linux so the child is signaled if the parent exits.
+// Pdeathsig is a no-op on non-Linux platforms; on Linux it signals the child when the parent exits.
 // @group OS Controls
 //
 // Example: pdeathsig

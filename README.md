@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/github/v/tag/goforj/execx?label=version&sort=semver" alt="Latest tag"> 
     <a href="https://codecov.io/gh/goforj/execx" ><img src="https://codecov.io/github/goforj/execx/graph/badge.svg?token=RBB8T6WQ0U"/></a>
 <!-- test-count:embed:start -->
-    <img src="https://img.shields.io/badge/tests-141-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-142-brightgreen" alt="Tests">
 <!-- test-count:embed:end -->
     <a href="https://goreportcard.com/report/github.com/goforj/execx"><img src="https://goreportcard.com/badge/github.com/goforj/execx" alt="Go Report Card"></a>
 </p>
@@ -697,7 +697,7 @@ fmt.Print(out)
 
 ### <a id="pdeathsig"></a>Pdeathsig
 
-Pdeathsig sets a parent-death signal on Linux so the child is signaled if the parent exits.
+Pdeathsig is a no-op on non-Linux platforms; on Linux it signals the child when the parent exits.
 
 ```go
 out, _ := execx.Command("printf", "ok").Pdeathsig(syscall.SIGTERM).Output()
@@ -921,7 +921,9 @@ _, _ = execx.Command("bash", "-c", `echo "hello world"`).
 	OnStdout(func(line string) { fmt.Println(line) }).
 	Run()
 // execx > bash -c 'echo "hello world"'
+//
 // hello world
+//
 // execx > bash -c 'echo "hello world"' (1ms)
 ```
 

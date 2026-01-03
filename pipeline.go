@@ -26,13 +26,13 @@ type pipeline struct {
 	withCombined bool
 }
 
-func (c *Cmd) newPipeline(withCombined bool) *pipeline {
+func (c *Cmd) newPipeline(withCombined bool, shadow *shadowContext) *pipeline {
 	stages := c.pipelineStages()
 	for _, stage := range stages {
 		stage.startTime = time.Now()
 		stage.cmd = stage.def.execCmd()
-		stdoutWriter := stage.def.stdoutWriter(&stage.stdoutBuf, withCombined, &stage.combinedBuf)
-		stderrWriter := stage.def.stderrWriter(&stage.stderrBuf, withCombined, &stage.combinedBuf)
+		stdoutWriter := stage.def.stdoutWriter(&stage.stdoutBuf, withCombined, &stage.combinedBuf, shadow)
+		stderrWriter := stage.def.stderrWriter(&stage.stderrBuf, withCombined, &stage.combinedBuf, shadow)
 		stage.cmd.Stdout = stdoutWriter
 		stage.cmd.Stderr = stderrWriter
 	}

@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -52,6 +53,41 @@ func TestShadowPrintDefault(t *testing.T) {
 	}
 	if !strings.Contains(plain, "execx > printf hi (") {
 		t.Fatalf("expected duration line, got %q", plain)
+	}
+}
+
+func TestShadowPrintDefaultSpacing(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("spacing test uses sh")
+	}
+	out := captureStderr(t, func() {
+		_, _ = Command("sh", "-c", "printf 'hi\\n' 1>&2").
+			ShadowPrint().
+			StderrWriter(os.Stderr).
+			Run()
+	})
+	plain := stripANSI(out)
+	lines := strings.Split(plain, "\n")
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	if len(lines) < 5 {
+		t.Fatalf("expected spacing lines, got %q", plain)
+	}
+	if !strings.Contains(lines[0], "execx > ") {
+		t.Fatalf("expected before line, got %q", lines[0])
+	}
+	if lines[1] != "" {
+		t.Fatalf("expected blank line before output, got %q", lines[1])
+	}
+	if lines[2] != "hi" {
+		t.Fatalf("expected output line, got %q", lines[2])
+	}
+	if lines[3] != "" {
+		t.Fatalf("expected blank line after output, got %q", lines[3])
+	}
+	if !strings.Contains(lines[4], "execx > ") {
+		t.Fatalf("expected after line, got %q", lines[4])
 	}
 }
 

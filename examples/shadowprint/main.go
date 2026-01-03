@@ -18,7 +18,9 @@ func main() {
 		OnStdout(func(line string) { fmt.Println(line) }).
 		Run()
 	// execx > bash -c 'echo "hello world"'
+	//
 	// hello world
+	//
 	// execx > bash -c 'echo "hello world"' (1ms)
 
 	// Example: shadow print options

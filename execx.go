@@ -541,7 +541,9 @@ func (c *Cmd) ShellEscaped() string {
 //		OnStdout(func(line string) { fmt.Println(line) }).
 //		Run()
 //	// execx > bash -c 'echo "hello world"'
+//	//
 //	// hello world
+//	//
 //	// execx > bash -c 'echo "hello world"' (1ms)
 //
 // Example: shadow print options
@@ -663,7 +665,7 @@ func WithFormatter(fn func(ShadowEvent) string) ShadowOption {
 //	// #bool true
 func (c *Cmd) Run() (Result, error) {
 	shadow := c.shadowPrintStart(false)
-	pipe := c.newPipeline(false)
+	pipe := c.newPipeline(false, shadow)
 	pipe.start()
 	pipe.wait()
 	result, _ := pipe.primaryResult(c.rootCmd().pipeMode)
@@ -724,7 +726,7 @@ func (c *Cmd) OutputTrimmed() (string, error) {
 //	// false
 func (c *Cmd) CombinedOutput() (string, error) {
 	shadow := c.shadowPrintStart(false)
-	pipe := c.newPipeline(true)
+	pipe := c.newPipeline(true, shadow)
 	pipe.start()
 	pipe.wait()
 	result, combined := pipe.primaryResult(c.rootCmd().pipeMode)
@@ -747,7 +749,7 @@ func (c *Cmd) CombinedOutput() (string, error) {
 //	// ]
 func (c *Cmd) PipelineResults() ([]Result, error) {
 	shadow := c.shadowPrintStart(false)
-	pipe := c.newPipeline(false)
+	pipe := c.newPipeline(false, shadow)
 	pipe.start()
 	pipe.wait()
 	results := pipe.results()
@@ -766,7 +768,7 @@ func (c *Cmd) PipelineResults() ([]Result, error) {
 //	// #bool true
 func (c *Cmd) Start() *Process {
 	shadow := c.shadowPrintStart(true)
-	pipe := c.newPipeline(false)
+	pipe := c.newPipeline(false, shadow)
 	pipe.start()
 
 	proc := &Process{
@@ -809,7 +811,7 @@ func (c *Cmd) execCmd() *exec.Cmd {
 	return cmd
 }
 
-func (c *Cmd) stdoutWriter(buf *bytes.Buffer, withCombined bool, combined *bytes.Buffer) io.Writer {
+func (c *Cmd) stdoutWriter(buf *bytes.Buffer, withCombined bool, combined *bytes.Buffer, shadow *shadowContext) io.Writer {
 	writers := []io.Writer{}
 	if c.stdoutW != nil {
 		writers = append(writers, c.stdoutW)
@@ -821,13 +823,14 @@ func (c *Cmd) stdoutWriter(buf *bytes.Buffer, withCombined bool, combined *bytes
 	if c.onStdout != nil {
 		writers = append(writers, &lineWriter{onLine: c.onStdout})
 	}
-	if len(writers) == 1 {
-		return buf
+	var out io.Writer = buf
+	if len(writers) > 1 {
+		out = io.MultiWriter(writers...)
 	}
-	return io.MultiWriter(writers...)
+	return wrapShadowWriter(out, shadow)
 }
 
-func (c *Cmd) stderrWriter(buf *bytes.Buffer, withCombined bool, combined *bytes.Buffer) io.Writer {
+func (c *Cmd) stderrWriter(buf *bytes.Buffer, withCombined bool, combined *bytes.Buffer, shadow *shadowContext) io.Writer {
 	writers := []io.Writer{}
 	if c.stderrW != nil {
 		writers = append(writers, c.stderrW)
@@ -839,10 +842,11 @@ func (c *Cmd) stderrWriter(buf *bytes.Buffer, withCombined bool, combined *bytes
 	if c.onStderr != nil {
 		writers = append(writers, &lineWriter{onLine: c.onStderr})
 	}
-	if len(writers) == 1 {
-		return buf
+	var out io.Writer = buf
+	if len(writers) > 1 {
+		out = io.MultiWriter(writers...)
 	}
-	return io.MultiWriter(writers...)
+	return wrapShadowWriter(out, shadow)
 }
 
 type lineWriter struct {
@@ -918,6 +922,11 @@ type shadowContext struct {
 	cmd   *Cmd
 	start time.Time
 	async bool
+
+	spacing                    bool
+	outputSeen                 bool
+	lastOutputEndedWithNewline bool
+	mu                         sync.Mutex
 }
 
 // ShadowPhase describes whether the shadow print is before or after execution.
@@ -960,6 +969,9 @@ func (c *Cmd) shadowPrintStart(async bool) *shadowContext {
 		start: time.Now(),
 		async: async,
 	}
+	if root.shadowConfig.formatter == nil {
+		ctx.spacing = true
+	}
 	shadowPrintLine(root, ShadowBefore, 0, async)
 	return ctx
 }
@@ -977,8 +989,46 @@ func (s *shadowContext) finish() {
 	if s == nil || s.cmd == nil {
 		return
 	}
+	if s.spacing && s.outputSeen {
+		s.mu.Lock()
+		endedWithNewline := s.lastOutputEndedWithNewline
+		s.mu.Unlock()
+		if endedWithNewline {
+			_, _ = fmt.Fprint(os.Stderr, "\n")
+		} else {
+			_, _ = fmt.Fprint(os.Stderr, "\n\n")
+		}
+	}
 	duration := time.Since(s.start).Round(time.Millisecond)
 	shadowPrintLine(s.cmd, ShadowAfter, duration, s.async)
+}
+
+type shadowOutputWriter struct {
+	ctx *shadowContext
+	w   io.Writer
+}
+
+func wrapShadowWriter(out io.Writer, shadow *shadowContext) io.Writer {
+	if shadow != nil && shadow.spacing {
+		return &shadowOutputWriter{ctx: shadow, w: out}
+	}
+	return out
+}
+
+func (s *shadowOutputWriter) Write(p []byte) (int, error) {
+	if s.ctx != nil && s.ctx.spacing && len(p) > 0 {
+		s.ctx.mu.Lock()
+		if !s.ctx.outputSeen {
+			s.ctx.outputSeen = true
+			first := p[0]
+			if first != '\n' && first != '\r' {
+				_, _ = fmt.Fprint(os.Stderr, "\n")
+			}
+		}
+		s.ctx.lastOutputEndedWithNewline = p[len(p)-1] == '\n'
+		s.ctx.mu.Unlock()
+	}
+	return s.w.Write(p)
 }
 
 func shadowPrintLine(cmd *Cmd, phase ShadowPhase, duration time.Duration, async bool) {
