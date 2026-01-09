@@ -71,29 +71,29 @@ func (c *Cmd) newPipeline(withCombined bool, shadow *shadowContext) *pipeline {
 }
 
 func (p *pipeline) start() {
-	for i, stage := range p.stages {
-		if stage.setupErr != nil {
-			stage.startErr = stage.setupErr
+	for i, stg := range p.stages {
+		if stg.setupErr != nil {
+			stg.startErr = stg.setupErr
 			for j := i + 1; j < len(p.stages); j++ {
-				p.stages[j].startErr = stage.startErr
+				p.stages[j].startErr = stg.startErr
 			}
 			break
 		}
-		stage.startErr = stage.cmd.Start()
-		if stage.startErr != nil {
-			if stage.ptyMaster != nil {
-				_ = stage.ptyMaster.Close()
+		stg.startErr = stg.cmd.Start()
+		if stg.startErr != nil {
+			if stg.ptyMaster != nil {
+				_ = stg.ptyMaster.Close()
 			}
-			if stage.ptySlave != nil {
-				_ = stage.ptySlave.Close()
+			if stg.ptySlave != nil {
+				_ = stg.ptySlave.Close()
 			}
 			for j := i + 1; j < len(p.stages); j++ {
-				p.stages[j].startErr = stage.startErr
+				p.stages[j].startErr = stg.startErr
 			}
 			break
 		}
-		if stage.ptyMaster != nil {
-			stage.ptyDone = make(chan error, 1)
+		if stg.ptyMaster != nil {
+			stg.ptyDone = make(chan error, 1)
 			go func(st *stage) {
 				_, err := io.Copy(st.ptyWriter, st.ptyMaster)
 				if err != nil {
@@ -102,8 +102,8 @@ func (p *pipeline) start() {
 					st.ptyDone <- nil
 				}
 				_ = st.ptyMaster.Close()
-			}(stage)
-			_ = stage.ptySlave.Close()
+			}(stg)
+			_ = stg.ptySlave.Close()
 		}
 	}
 }
