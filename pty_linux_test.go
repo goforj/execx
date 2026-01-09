@@ -4,7 +4,6 @@ package execx
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"syscall"
 	"testing"
