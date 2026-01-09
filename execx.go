@@ -15,6 +15,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"golang.org/x/term"
 )
 
 type envMode int
@@ -71,6 +73,7 @@ type Cmd struct {
 	stderrW  io.Writer
 
 	sysProcAttr *syscall.SysProcAttr
+	onExecCmd   func(*exec.Cmd)
 
 	next     *Cmd
 	root     *Cmd
@@ -374,6 +377,9 @@ func (c *Cmd) OnStderr(fn func(string)) *Cmd {
 // StdoutWriter sets a raw writer for stdout.
 // @group Streaming
 //
+// When the writer is a terminal and no line callbacks or combined output are enabled,
+// execx passes stdout through directly and does not buffer it for results.
+//
 // Example: stdout writer
 //
 //	var out strings.Builder
@@ -390,6 +396,9 @@ func (c *Cmd) StdoutWriter(w io.Writer) *Cmd {
 // StderrWriter sets a raw writer for stderr.
 // @group Streaming
 //
+// When the writer is a terminal and no line callbacks or combined output are enabled,
+// execx passes stderr through directly and does not buffer it for results.
+//
 // Example: stderr writer
 //
 //	var out strings.Builder
@@ -404,6 +413,21 @@ func (c *Cmd) StdoutWriter(w io.Writer) *Cmd {
 //	// false
 func (c *Cmd) StderrWriter(w io.Writer) *Cmd {
 	c.stderrW = w
+	return c
+}
+
+// OnExecCmd registers a callback to mutate the underlying exec.Cmd before start.
+// @group Execution
+//
+// Example: exec cmd
+//
+//	_, _ = execx.Command("printf", "hi").
+//		OnExecCmd(func(cmd *exec.Cmd) {
+//			cmd.SysProcAttr = &syscall.SysProcAttr{}
+//		}).
+//		Run()
+func (c *Cmd) OnExecCmd(fn func(*exec.Cmd)) *Cmd {
+	c.onExecCmd = fn
 	return c
 }
 
@@ -808,10 +832,28 @@ func (c *Cmd) execCmd() *exec.Cmd {
 	if c.sysProcAttr != nil {
 		cmd.SysProcAttr = c.sysProcAttr
 	}
+	if c.onExecCmd != nil {
+		c.onExecCmd(cmd)
+	}
 	return cmd
 }
 
+var isTerminalFunc = term.IsTerminal
+
+func isTerminalWriter(w io.Writer) bool {
+	f, ok := w.(*os.File)
+	if !ok {
+		return false
+	}
+	return isTerminalFunc(int(f.Fd()))
+}
+
 func (c *Cmd) stdoutWriter(buf *bytes.Buffer, withCombined bool, combined *bytes.Buffer, shadow *shadowContext) io.Writer {
+	if c.stdoutW != nil && c.onStdout == nil && !withCombined {
+		if isTerminalWriter(c.stdoutW) {
+			return c.stdoutW
+		}
+	}
 	writers := []io.Writer{}
 	if c.stdoutW != nil {
 		writers = append(writers, c.stdoutW)
@@ -831,6 +873,11 @@ func (c *Cmd) stdoutWriter(buf *bytes.Buffer, withCombined bool, combined *bytes
 }
 
 func (c *Cmd) stderrWriter(buf *bytes.Buffer, withCombined bool, combined *bytes.Buffer, shadow *shadowContext) io.Writer {
+	if c.stderrW != nil && c.onStderr == nil && !withCombined {
+		if isTerminalWriter(c.stderrW) {
+			return c.stderrW
+		}
+	}
 	writers := []io.Writer{}
 	if c.stderrW != nil {
 		writers = append(writers, c.stderrW)
@@ -854,6 +901,7 @@ type lineWriter struct {
 	buf    bytes.Buffer
 }
 
+// Write buffers output and emits completed lines to the callback.
 func (l *lineWriter) Write(p []byte) (int, error) {
 	if l.onLine == nil {
 		return len(p), nil
@@ -933,8 +981,10 @@ type shadowContext struct {
 type ShadowPhase string
 
 const (
+	// ShadowBefore labels the pre-execution shadow print.
 	ShadowBefore ShadowPhase = "before"
-	ShadowAfter  ShadowPhase = "after"
+	// ShadowAfter labels the post-execution shadow print.
+	ShadowAfter ShadowPhase = "after"
 )
 
 // ShadowEvent captures details for ShadowPrint formatting.
@@ -1015,6 +1065,7 @@ func wrapShadowWriter(out io.Writer, shadow *shadowContext) io.Writer {
 	return out
 }
 
+// Write forwards output while tracking spacing for shadow output.
 func (s *shadowOutputWriter) Write(p []byte) (int, error) {
 	if s.ctx != nil && s.ctx.spacing && len(p) > 0 {
 		s.ctx.mu.Lock()

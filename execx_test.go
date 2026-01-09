@@ -1,6 +1,7 @@
 package execx
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -511,6 +512,61 @@ func TestLineWriterNil(t *testing.T) {
 	n, err := writer.Write([]byte("data"))
 	if err != nil || n != 4 {
 		t.Fatalf("unexpected write result n=%d err=%v", n, err)
+	}
+}
+
+func TestOnExecCmdApplied(t *testing.T) {
+	called := false
+	cmd := Command("printf", "hi").OnExecCmd(func(ec *exec.Cmd) {
+		called = true
+		ec.Env = append(ec.Env, "EXECX_TEST=1")
+	})
+	execCmd := cmd.execCmd()
+	if !called {
+		t.Fatalf("expected OnExecCmd callback to run")
+	}
+	found := false
+	for _, entry := range execCmd.Env {
+		if entry == "EXECX_TEST=1" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected OnExecCmd to mutate env")
+	}
+}
+
+func TestIsTerminalWriterNonFile(t *testing.T) {
+	var buf bytes.Buffer
+	if isTerminalWriter(&buf) {
+		t.Fatalf("expected non-file writer to be non-terminal")
+	}
+}
+
+func TestStdoutWriterTTYPassthrough(t *testing.T) {
+	prev := isTerminalFunc
+	isTerminalFunc = func(int) bool { return true }
+	t.Cleanup(func() {
+		isTerminalFunc = prev
+	})
+	cmd := Command("printf", "hi").StdoutWriter(os.Stdout)
+	out := cmd.stdoutWriter(&bytes.Buffer{}, false, &bytes.Buffer{}, nil)
+	if out != os.Stdout {
+		t.Fatalf("expected stdout writer to passthrough tty")
+	}
+}
+
+func TestStderrWriterTTYPassthrough(t *testing.T) {
+	prev := isTerminalFunc
+	isTerminalFunc = func(int) bool { return true }
+	t.Cleanup(func() {
+		isTerminalFunc = prev
+	})
+	cmd := Command("printf", "hi").StderrWriter(os.Stderr)
+	out := cmd.stderrWriter(&bytes.Buffer{}, false, &bytes.Buffer{}, nil)
+	if out != os.Stderr {
+		t.Fatalf("expected stderr writer to passthrough tty")
 	}
 }
 

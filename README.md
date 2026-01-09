@@ -212,7 +212,7 @@ All public APIs are covered by runnable examples under `./examples`, and the tes
 | **Decoding** | [Decode](#decode) [DecodeJSON](#decodejson) [DecodeWith](#decodewith) [DecodeYAML](#decodeyaml) [FromCombined](#fromcombined) [FromStderr](#fromstderr) [FromStdout](#fromstdout) [Into](#into) [Trim](#trim) |
 | **Environment** | [Env](#env) [EnvAppend](#envappend) [EnvInherit](#envinherit) [EnvList](#envlist) [EnvOnly](#envonly) |
 | **Errors** | [Error](#error) [Unwrap](#unwrap) |
-| **Execution** | [CombinedOutput](#combinedoutput) [Output](#output) [OutputBytes](#outputbytes) [OutputTrimmed](#outputtrimmed) [Run](#run) [Start](#start) |
+| **Execution** | [CombinedOutput](#combinedoutput) [Output](#output) [OutputBytes](#outputbytes) [OutputTrimmed](#outputtrimmed) [Run](#run) [Start](#start) [OnExecCmd](#onexeccmd) |
 | **Input** | [StdinBytes](#stdinbytes) [StdinFile](#stdinfile) [StdinReader](#stdinreader) [StdinString](#stdinstring) |
 | **OS Controls** | [CreationFlags](#creationflags) [HideWindow](#hidewindow) [Pdeathsig](#pdeathsig) [Setpgid](#setpgid) [Setsid](#setsid) |
 | **Pipelining** | [Pipe](#pipe) [PipeBestEffort](#pipebesteffort) [PipeStrict](#pipestrict) [PipelineResults](#pipelineresults) |
@@ -620,6 +620,18 @@ fmt.Println(res.ExitCode == 0)
 // #bool true
 ```
 
+### <a id="onexeccmd"></a>OnExecCmd
+
+OnExecCmd registers a callback to mutate the underlying exec.Cmd before start.
+
+```go
+_, _ = execx.Command("printf", "hi").
+	OnExecCmd(func(cmd *exec.Cmd) {
+		cmd.Env = append(cmd.Env, "EXAMPLE=1")
+	}).
+	Run()
+```
+
 ## Input
 
 ### <a id="stdinbytes"></a>StdinBytes
@@ -1019,6 +1031,8 @@ _, _ = execx.Command("printf", "hi\n").
 
 StderrWriter sets a raw writer for stderr.
 
+When the writer is a terminal and no line callbacks or combined output are enabled, execx passes stderr through directly and does not buffer it for results.
+
 ```go
 var out strings.Builder
 _, err := execx.Command("go", "env", "-badflag").
@@ -1035,6 +1049,8 @@ fmt.Println(err == nil)
 ### <a id="stdoutwriter"></a>StdoutWriter
 
 StdoutWriter sets a raw writer for stdout.
+
+When the writer is a terminal and no line callbacks or combined output are enabled, execx passes stdout through directly and does not buffer it for results.
 
 ```go
 var out strings.Builder
