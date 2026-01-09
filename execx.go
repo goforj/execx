@@ -74,6 +74,7 @@ type Cmd struct {
 
 	sysProcAttr *syscall.SysProcAttr
 	onExecCmd   func(*exec.Cmd)
+	usePTY      bool
 
 	next     *Cmd
 	root     *Cmd
@@ -416,6 +417,25 @@ func (c *Cmd) StderrWriter(w io.Writer) *Cmd {
 	return c
 }
 
+// WithPTY attaches stdout/stderr to a pseudo-terminal.
+// @group Streaming
+//
+// When enabled, stdout and stderr are merged into a single stream. OnStdout and
+// OnStderr both receive the same lines, and Result.Stderr remains empty.
+// Platforms without PTY support return an error when the command runs.
+//
+// Example: with pty
+//
+//	_, _ = execx.Command("printf", "hi").
+//		WithPTY().
+//		OnStdout(func(line string) { fmt.Println(line) }).
+//		Run()
+//	// hi
+func (c *Cmd) WithPTY() *Cmd {
+	c.rootCmd().usePTY = true
+	return c
+}
+
 // OnExecCmd registers a callback to mutate the underlying exec.Cmd before start.
 // @group Execution
 //
@@ -688,6 +708,9 @@ func WithFormatter(fn func(ShadowEvent) string) ShadowOption {
 //	fmt.Println(res.ExitCode == 0)
 //	// #bool true
 func (c *Cmd) Run() (Result, error) {
+	if err := c.validatePTY(); err != nil {
+		return Result{Err: err, ExitCode: -1}, err
+	}
 	shadow := c.shadowPrintStart(false)
 	pipe := c.newPipeline(false, shadow)
 	pipe.start()
@@ -749,6 +772,9 @@ func (c *Cmd) OutputTrimmed() (string, error) {
 //	// Run 'go help env' for details.
 //	// false
 func (c *Cmd) CombinedOutput() (string, error) {
+	if err := c.validatePTY(); err != nil {
+		return "", err
+	}
 	shadow := c.shadowPrintStart(false)
 	pipe := c.newPipeline(true, shadow)
 	pipe.start()
@@ -772,6 +798,9 @@ func (c *Cmd) CombinedOutput() (string, error) {
 //	//	{Stdout:GO Stderr: ExitCode:0 Err:<nil> Duration:4.976291ms signal:<nil>}
 //	// ]
 func (c *Cmd) PipelineResults() ([]Result, error) {
+	if err := c.validatePTY(); err != nil {
+		return nil, err
+	}
 	shadow := c.shadowPrintStart(false)
 	pipe := c.newPipeline(false, shadow)
 	pipe.start()
@@ -791,6 +820,11 @@ func (c *Cmd) PipelineResults() ([]Result, error) {
 //	fmt.Println(res.ExitCode == 0)
 //	// #bool true
 func (c *Cmd) Start() *Process {
+	if err := c.validatePTY(); err != nil {
+		proc := &Process{done: make(chan struct{})}
+		proc.finish(Result{Err: err, ExitCode: -1})
+		return proc
+	}
 	shadow := c.shadowPrintStart(true)
 	pipe := c.newPipeline(false, shadow)
 	pipe.start()
@@ -839,6 +873,8 @@ func (c *Cmd) execCmd() *exec.Cmd {
 }
 
 var isTerminalFunc = term.IsTerminal
+var openPTYFunc = openPTY
+var ptyCheckFunc = ptyCheck
 
 func isTerminalWriter(w io.Writer) bool {
 	f, ok := w.(*os.File)
@@ -846,6 +882,20 @@ func isTerminalWriter(w io.Writer) bool {
 		return false
 	}
 	return isTerminalFunc(int(f.Fd()))
+}
+
+func (c *Cmd) validatePTY() error {
+	root := c.rootCmd()
+	if !root.usePTY {
+		return nil
+	}
+	if root.next != nil {
+		return errors.New("execx: WithPTY is not supported with pipelines")
+	}
+	if err := ptyCheckFunc(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (c *Cmd) stdoutWriter(buf *bytes.Buffer, withCombined bool, combined *bytes.Buffer, shadow *shadowContext) io.Writer {
@@ -896,6 +946,28 @@ func (c *Cmd) stderrWriter(buf *bytes.Buffer, withCombined bool, combined *bytes
 	return wrapShadowWriter(out, shadow)
 }
 
+func (c *Cmd) ptyWriter(buf *bytes.Buffer, withCombined bool, combined *bytes.Buffer, shadow *shadowContext) io.Writer {
+	writers := []io.Writer{}
+	if c.stdoutW != nil {
+		writers = append(writers, c.stdoutW)
+	}
+	if c.stderrW != nil && c.stderrW != c.stdoutW {
+		writers = append(writers, c.stderrW)
+	}
+	writers = append(writers, buf)
+	if withCombined {
+		writers = append(writers, combined)
+	}
+	if c.onStdout != nil || c.onStderr != nil {
+		writers = append(writers, &ptyLineWriter{onStdout: c.onStdout, onStderr: c.onStderr})
+	}
+	var out io.Writer = buf
+	if len(writers) > 1 {
+		out = io.MultiWriter(writers...)
+	}
+	return wrapShadowWriter(out, shadow)
+}
+
 type lineWriter struct {
 	onLine func(string)
 	buf    bytes.Buffer
@@ -912,6 +984,35 @@ func (l *lineWriter) Write(p []byte) (int, error) {
 			l.buf.Reset()
 			line = strings.TrimSuffix(line, "\r")
 			l.onLine(line)
+			continue
+		}
+		_ = l.buf.WriteByte(b)
+	}
+	return len(p), nil
+}
+
+type ptyLineWriter struct {
+	onStdout func(string)
+	onStderr func(string)
+	buf      bytes.Buffer
+}
+
+// Write buffers output and emits completed lines to stdout/stderr callbacks.
+func (l *ptyLineWriter) Write(p []byte) (int, error) {
+	if l.onStdout == nil && l.onStderr == nil {
+		return len(p), nil
+	}
+	for _, b := range p {
+		if b == '\n' {
+			line := l.buf.String()
+			l.buf.Reset()
+			line = strings.TrimSuffix(line, "\r")
+			if l.onStdout != nil {
+				l.onStdout(line)
+			}
+			if l.onStderr != nil {
+				l.onStderr(line)
+			}
 			continue
 		}
 		_ = l.buf.WriteByte(b)

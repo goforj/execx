@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"os/exec"
 	"time"
 )
@@ -16,9 +17,14 @@ type stage struct {
 	stderrBuf   bytes.Buffer
 	combinedBuf bytes.Buffer
 	startErr    error
+	setupErr    error
 	waitErr     error
 	startTime   time.Time
 	pipeWriter  *io.PipeWriter
+	ptyMaster   *os.File
+	ptySlave    *os.File
+	ptyWriter   io.Writer
+	ptyDone     chan error
 }
 
 type pipeline struct {
@@ -31,10 +37,23 @@ func (c *Cmd) newPipeline(withCombined bool, shadow *shadowContext) *pipeline {
 	for _, stage := range stages {
 		stage.startTime = time.Now()
 		stage.cmd = stage.def.execCmd()
-		stdoutWriter := stage.def.stdoutWriter(&stage.stdoutBuf, withCombined, &stage.combinedBuf, shadow)
-		stderrWriter := stage.def.stderrWriter(&stage.stderrBuf, withCombined, &stage.combinedBuf, shadow)
-		stage.cmd.Stdout = stdoutWriter
-		stage.cmd.Stderr = stderrWriter
+		if stage.def.rootCmd().usePTY {
+			master, slave, err := openPTYFunc()
+			if err != nil {
+				stage.setupErr = err
+				continue
+			}
+			stage.ptyMaster = master
+			stage.ptySlave = slave
+			stage.ptyWriter = stage.def.ptyWriter(&stage.stdoutBuf, withCombined, &stage.combinedBuf, shadow)
+			stage.cmd.Stdout = slave
+			stage.cmd.Stderr = slave
+		} else {
+			stdoutWriter := stage.def.stdoutWriter(&stage.stdoutBuf, withCombined, &stage.combinedBuf, shadow)
+			stderrWriter := stage.def.stderrWriter(&stage.stderrBuf, withCombined, &stage.combinedBuf, shadow)
+			stage.cmd.Stdout = stdoutWriter
+			stage.cmd.Stderr = stderrWriter
+		}
 	}
 
 	for i := range stages {
@@ -53,12 +72,38 @@ func (c *Cmd) newPipeline(withCombined bool, shadow *shadowContext) *pipeline {
 
 func (p *pipeline) start() {
 	for i, stage := range p.stages {
-		stage.startErr = stage.cmd.Start()
-		if stage.startErr != nil {
+		if stage.setupErr != nil {
+			stage.startErr = stage.setupErr
 			for j := i + 1; j < len(p.stages); j++ {
 				p.stages[j].startErr = stage.startErr
 			}
 			break
+		}
+		stage.startErr = stage.cmd.Start()
+		if stage.startErr != nil {
+			if stage.ptyMaster != nil {
+				_ = stage.ptyMaster.Close()
+			}
+			if stage.ptySlave != nil {
+				_ = stage.ptySlave.Close()
+			}
+			for j := i + 1; j < len(p.stages); j++ {
+				p.stages[j].startErr = stage.startErr
+			}
+			break
+		}
+		if stage.ptyMaster != nil {
+			stage.ptyDone = make(chan error, 1)
+			go func(st *stage) {
+				_, err := io.Copy(st.ptyWriter, st.ptyMaster)
+				if err != nil {
+					st.ptyDone <- err
+				} else {
+					st.ptyDone <- nil
+				}
+				_ = st.ptyMaster.Close()
+			}(stage)
+			_ = stage.ptySlave.Close()
 		}
 	}
 }
@@ -69,11 +114,19 @@ func (p *pipeline) wait() {
 			if p.stages[i].pipeWriter != nil {
 				_ = p.stages[i].pipeWriter.Close()
 			}
+			if p.stages[i].ptyDone != nil {
+				<-p.stages[i].ptyDone
+			}
 			continue
 		}
 		p.stages[i].waitErr = p.stages[i].cmd.Wait()
 		if p.stages[i].pipeWriter != nil {
 			_ = p.stages[i].pipeWriter.Close()
+		}
+		if p.stages[i].ptyDone != nil {
+			if err := <-p.stages[i].ptyDone; err != nil && p.stages[i].waitErr == nil {
+				p.stages[i].waitErr = err
+			}
 		}
 	}
 }

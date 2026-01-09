@@ -515,6 +515,77 @@ func TestLineWriterNil(t *testing.T) {
 	}
 }
 
+func TestWithPTYPipelineUnsupported(t *testing.T) {
+	prevCheck := ptyCheckFunc
+	ptyCheckFunc = func() error { return nil }
+	t.Cleanup(func() {
+		ptyCheckFunc = prevCheck
+	})
+	_, err := Command("printf", "hi").
+		WithPTY().
+		Pipe("tr", "a-z", "A-Z").
+		Run()
+	if err == nil || !strings.Contains(err.Error(), "WithPTY is not supported") {
+		t.Fatalf("expected WithPTY pipeline error, got %v", err)
+	}
+}
+
+func TestWithPTYOpenError(t *testing.T) {
+	prevOpen := openPTYFunc
+	prevCheck := ptyCheckFunc
+	openPTYFunc = func() (*os.File, *os.File, error) {
+		return nil, nil, errors.New("pty open failed")
+	}
+	ptyCheckFunc = func() error { return nil }
+	t.Cleanup(func() {
+		openPTYFunc = prevOpen
+		ptyCheckFunc = prevCheck
+	})
+	_, err := Command("printf", "hi").WithPTY().Run()
+	if err == nil || !strings.Contains(err.Error(), "pty open failed") {
+		t.Fatalf("expected openpty error, got %v", err)
+	}
+}
+
+func TestWithPTYCombinedStream(t *testing.T) {
+	prevOpen := openPTYFunc
+	prevCheck := ptyCheckFunc
+	openPTYFunc = func() (*os.File, *os.File, error) {
+		r, w, err := os.Pipe()
+		if err != nil {
+			return nil, nil, err
+		}
+		return r, w, nil
+	}
+	ptyCheckFunc = func() error { return nil }
+	t.Cleanup(func() {
+		openPTYFunc = prevOpen
+		ptyCheckFunc = prevCheck
+	})
+	stdoutLines := []string{}
+	stderrLines := []string{}
+	res, err := Command("printf", "a\nb\n").
+		WithPTY().
+		OnStdout(func(line string) { stdoutLines = append(stdoutLines, line) }).
+		OnStderr(func(line string) { stderrLines = append(stderrLines, line) }).
+		Run()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if res.Stdout != "a\nb\n" {
+		t.Fatalf("expected stdout to contain output, got %q", res.Stdout)
+	}
+	if res.Stderr != "" {
+		t.Fatalf("expected stderr to be empty, got %q", res.Stderr)
+	}
+	if strings.Join(stdoutLines, ",") != "a,b" {
+		t.Fatalf("unexpected stdout lines: %v", stdoutLines)
+	}
+	if strings.Join(stderrLines, ",") != "a,b" {
+		t.Fatalf("unexpected stderr lines: %v", stderrLines)
+	}
+}
+
 func TestOnExecCmdApplied(t *testing.T) {
 	called := false
 	cmd := Command("printf", "hi").OnExecCmd(func(ec *exec.Cmd) {

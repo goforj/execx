@@ -219,7 +219,7 @@ All public APIs are covered by runnable examples under `./examples`, and the tes
 | **Process** | [GracefulShutdown](#gracefulshutdown) [Interrupt](#interrupt) [KillAfter](#killafter) [Send](#send) [Terminate](#terminate) [Wait](#wait) |
 | **Results** | [IsExitCode](#isexitcode) [IsSignal](#issignal) [OK](#ok) |
 | **Shadow Print** | [ShadowOff](#shadowoff) [ShadowOn](#shadowon) [ShadowPrint](#shadowprint) [WithFormatter](#withformatter) [WithMask](#withmask) [WithPrefix](#withprefix) |
-| **Streaming** | [OnStderr](#onstderr) [OnStdout](#onstdout) [StderrWriter](#stderrwriter) [StdoutWriter](#stdoutwriter) |
+| **Streaming** | [OnStderr](#onstderr) [OnStdout](#onstdout) [StderrWriter](#stderrwriter) [StdoutWriter](#stdoutwriter) [WithPTY](#withpty) |
 | **WorkingDir** | [Dir](#dir) |
 
 
@@ -1059,6 +1059,21 @@ _, _ = execx.Command("printf", "hello").
 	Run()
 fmt.Print(out.String())
 // hello
+```
+
+### <a id="withpty"></a>WithPTY
+
+WithPTY attaches stdout/stderr to a pseudo-terminal.
+
+Output is combined; OnStdout and OnStderr receive the same lines, and Result.Stderr remains empty.
+Platforms without PTY support return an error when the command runs.
+
+```go
+_, _ = execx.Command("printf", "hi").
+	WithPTY().
+	OnStdout(func(line string) { fmt.Println(line) }).
+	Run()
+// hi
 ```
 
 ## WorkingDir
