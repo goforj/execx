@@ -74,9 +74,6 @@ func (p *pipeline) start() {
 	for i, stg := range p.stages {
 		if stg.setupErr != nil {
 			stg.startErr = stg.setupErr
-			for j := i + 1; j < len(p.stages); j++ {
-				p.stages[j].startErr = stg.startErr
-			}
 			break
 		}
 		stg.startErr = stg.cmd.Start()
@@ -113,9 +110,6 @@ func (p *pipeline) wait() {
 		if p.stages[i].startErr != nil {
 			if p.stages[i].pipeWriter != nil {
 				_ = p.stages[i].pipeWriter.Close()
-			}
-			if p.stages[i].ptyDone != nil {
-				<-p.stages[i].ptyDone
 			}
 			continue
 		}

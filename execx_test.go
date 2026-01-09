@@ -586,6 +586,215 @@ func TestWithPTYCombinedStream(t *testing.T) {
 	}
 }
 
+func TestWithPTYCombinedOutput(t *testing.T) {
+	prevOpen := openPTYFunc
+	prevCheck := ptyCheckFunc
+	openPTYFunc = func() (*os.File, *os.File, error) {
+		r, w, err := os.Pipe()
+		if err != nil {
+			return nil, nil, err
+		}
+		return r, w, nil
+	}
+	ptyCheckFunc = func() error { return nil }
+	t.Cleanup(func() {
+		openPTYFunc = prevOpen
+		ptyCheckFunc = prevCheck
+	})
+	out, err := Command("printf", "hi").WithPTY().CombinedOutput()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if out != "hi" {
+		t.Fatalf("expected combined output, got %q", out)
+	}
+}
+
+func TestWithPTYPipelineResults(t *testing.T) {
+	prevOpen := openPTYFunc
+	prevCheck := ptyCheckFunc
+	openPTYFunc = func() (*os.File, *os.File, error) {
+		r, w, err := os.Pipe()
+		if err != nil {
+			return nil, nil, err
+		}
+		return r, w, nil
+	}
+	ptyCheckFunc = func() error { return nil }
+	t.Cleanup(func() {
+		openPTYFunc = prevOpen
+		ptyCheckFunc = prevCheck
+	})
+	results, err := Command("printf", "ok").WithPTY().PipelineResults()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(results) != 1 || results[0].Stdout != "ok" {
+		t.Fatalf("unexpected pipeline results: %+v", results)
+	}
+}
+
+func TestWithPTYStart(t *testing.T) {
+	prevOpen := openPTYFunc
+	prevCheck := ptyCheckFunc
+	openPTYFunc = func() (*os.File, *os.File, error) {
+		r, w, err := os.Pipe()
+		if err != nil {
+			return nil, nil, err
+		}
+		return r, w, nil
+	}
+	ptyCheckFunc = func() error { return nil }
+	t.Cleanup(func() {
+		openPTYFunc = prevOpen
+		ptyCheckFunc = prevCheck
+	})
+	proc := Command("printf", "hi").WithPTY().Start()
+	res, err := proc.Wait()
+	if err != nil || res.Stdout != "hi" {
+		t.Fatalf("expected stdout from Start, got %q err=%v", res.Stdout, err)
+	}
+}
+
+func TestWithPTYCheckError(t *testing.T) {
+	prevCheck := ptyCheckFunc
+	ptyCheckFunc = func() error { return errors.New("pty unsupported") }
+	t.Cleanup(func() {
+		ptyCheckFunc = prevCheck
+	})
+	_, err := Command("printf", "hi").WithPTY().CombinedOutput()
+	if err == nil || !strings.Contains(err.Error(), "pty unsupported") {
+		t.Fatalf("expected pty check error, got %v", err)
+	}
+}
+
+func TestWithPTYStartCheckError(t *testing.T) {
+	prevCheck := ptyCheckFunc
+	ptyCheckFunc = func() error { return errors.New("pty unsupported") }
+	t.Cleanup(func() {
+		ptyCheckFunc = prevCheck
+	})
+	proc := Command("printf", "hi").WithPTY().Start()
+	res, err := proc.Wait()
+	if err == nil || !strings.Contains(err.Error(), "pty unsupported") {
+		t.Fatalf("expected pty check error, got %v", err)
+	}
+	if res.ExitCode != -1 {
+		t.Fatalf("expected exit code -1, got %d", res.ExitCode)
+	}
+}
+
+func TestWithPTYPipelineResultsCheckError(t *testing.T) {
+	prevCheck := ptyCheckFunc
+	ptyCheckFunc = func() error { return errors.New("pty unsupported") }
+	t.Cleanup(func() {
+		ptyCheckFunc = prevCheck
+	})
+	_, err := Command("printf", "hi").WithPTY().PipelineResults()
+	if err == nil || !strings.Contains(err.Error(), "pty unsupported") {
+		t.Fatalf("expected pty check error, got %v", err)
+	}
+}
+
+type errWriter struct {
+	called bool
+}
+
+func (w *errWriter) Write(p []byte) (int, error) {
+	w.called = true
+	return 0, errors.New("write failed")
+}
+
+func TestWithPTYWriterError(t *testing.T) {
+	prevOpen := openPTYFunc
+	prevCheck := ptyCheckFunc
+	openPTYFunc = func() (*os.File, *os.File, error) {
+		r, w, err := os.Pipe()
+		if err != nil {
+			return nil, nil, err
+		}
+		return r, w, nil
+	}
+	ptyCheckFunc = func() error { return nil }
+	t.Cleanup(func() {
+		openPTYFunc = prevOpen
+		ptyCheckFunc = prevCheck
+	})
+	writer := &errWriter{}
+	res, err := Command("printf", "hi").WithPTY().StdoutWriter(writer).Run()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if !writer.called {
+		t.Fatalf("expected writer to be called")
+	}
+	if res.Stdout != "" {
+		t.Fatalf("expected empty stdout, got %q", res.Stdout)
+	}
+}
+
+func TestWithPTYStartError(t *testing.T) {
+	prevOpen := openPTYFunc
+	prevCheck := ptyCheckFunc
+	openPTYFunc = func() (*os.File, *os.File, error) {
+		r, w, err := os.Pipe()
+		if err != nil {
+			return nil, nil, err
+		}
+		return r, w, nil
+	}
+	ptyCheckFunc = func() error { return nil }
+	t.Cleanup(func() {
+		openPTYFunc = prevOpen
+		ptyCheckFunc = prevCheck
+	})
+	_, err := Command("execx-does-not-exist").WithPTY().Run()
+	if err == nil {
+		t.Fatalf("expected start error")
+	}
+}
+
+func TestWithPTYWritersNoCallbacks(t *testing.T) {
+	prevOpen := openPTYFunc
+	prevCheck := ptyCheckFunc
+	openPTYFunc = func() (*os.File, *os.File, error) {
+		r, w, err := os.Pipe()
+		if err != nil {
+			return nil, nil, err
+		}
+		return r, w, nil
+	}
+	ptyCheckFunc = func() error { return nil }
+	t.Cleanup(func() {
+		openPTYFunc = prevOpen
+		ptyCheckFunc = prevCheck
+	})
+	var stdoutBuf bytes.Buffer
+	var stderrBuf bytes.Buffer
+	res, err := Command("printf", "hi").
+		WithPTY().
+		StdoutWriter(&stdoutBuf).
+		StderrWriter(&stderrBuf).
+		Run()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if res.Stdout != "hi" {
+		t.Fatalf("expected stdout buffer to capture output, got %q", res.Stdout)
+	}
+	if stdoutBuf.String() != "hi" || stderrBuf.String() != "hi" {
+		t.Fatalf("unexpected writers: stdout=%q stderr=%q", stdoutBuf.String(), stderrBuf.String())
+	}
+}
+
+func TestPTYLineWriterNil(t *testing.T) {
+	writer := &ptyLineWriter{}
+	n, err := writer.Write([]byte("data"))
+	if err != nil || n != 4 {
+		t.Fatalf("unexpected write result n=%d err=%v", n, err)
+	}
+}
+
 func TestOnExecCmdApplied(t *testing.T) {
 	called := false
 	cmd := Command("printf", "hi").OnExecCmd(func(ec *exec.Cmd) {
@@ -699,6 +908,21 @@ func TestPipelineResultsError(t *testing.T) {
 	var errExec ErrExec
 	if !errors.As(err, &errExec) {
 		t.Fatalf("expected ErrExec, got %T", err)
+	}
+}
+
+func TestPipelineStartErrorPropagation(t *testing.T) {
+	results, err := Command("execx-does-not-exist").
+		Pipe("printf", "ok").
+		PipelineResults()
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+	if results[1].Err == nil {
+		t.Fatalf("expected downstream start error")
 	}
 }
 
