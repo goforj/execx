@@ -1,6 +1,3 @@
-//go:build ignore
-// +build ignore
-
 package main
 
 import (
@@ -11,6 +8,9 @@ import (
 
 func main() {
 	// StdoutWriter sets a raw writer for stdout.
+	//
+	// When the writer is a terminal and no line callbacks or combined output are enabled,
+	// execx passes stdout through directly and does not buffer it for results.
 
 	// Example: stdout writer
 	var out strings.Builder

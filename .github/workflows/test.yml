@@ -19,14 +19,21 @@ jobs:
         with:
           go-version: "stable"
 
-      - name: Install dependencies
-        run: go mod tidy
+      - name: Verify module files
+        run: |
+          go mod tidy
+          go -C docs mod tidy
+          go -C examples mod tidy
+          git diff --exit-code -- go.mod go.sum docs/go.mod docs/go.sum examples/go.mod examples/go.sum
 
       - name: Run tests
-        run: go test ./... -v
+        run: |
+          go test ./... -v
+          go -C docs test ./...
+          go -C examples test ./...
 
       - name: Run tests with coverage
-        run: go test -coverprofile=coverage.txt
+        run: go test -coverprofile=coverage.txt .
 
       - name: Upload results to Codecov
         uses: codecov/codecov-action@v5

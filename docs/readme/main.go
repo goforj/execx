@@ -1,6 +1,4 @@
-//go:build ignore
-// +build ignore
-
+// Command readme regenerates the API reference embedded in README.md.
 package main
 
 import (
@@ -25,6 +23,7 @@ const (
 	testCountEnd   = "<!-- test-count:embed:end -->"
 )
 
+// main exits non-zero so watcher and CI invocations cannot silently accept stale generation.
 func main() {
 	if err := run(); err != nil {
 		fmt.Println("Error:", err)
@@ -33,6 +32,7 @@ func main() {
 	fmt.Println("✔ API section updated in README.md")
 }
 
+// run updates the API and test-count markers together so README generation remains atomic.
 func run() error {
 	root, err := findRoot()
 	if err != nil {
@@ -104,6 +104,7 @@ var (
 	exampleHeader  = regexp.MustCompile(`(?i)^\s*Example:\s*(.*)$`)
 )
 
+// parseFuncs merges platform-specific declarations into one portable public API reference.
 func parseFuncs(root string) ([]*FuncDoc, error) {
 	fset := token.NewFileSet()
 
@@ -131,7 +132,14 @@ func parseFuncs(root string) ([]*FuncDoc, error) {
 
 	funcs := map[string]*FuncDoc{}
 
-	for _, file := range pkg.Files {
+	filenames := make([]string, 0, len(pkg.Files))
+	for filename := range pkg.Files {
+		filenames = append(filenames, filename)
+	}
+	sort.Strings(filenames)
+
+	for _, filename := range filenames {
+		file := pkg.Files[filename]
 		for _, decl := range file.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
 			if !ok || fn.Doc == nil {
@@ -170,6 +178,7 @@ func parseFuncs(root string) ([]*FuncDoc, error) {
 	return out, nil
 }
 
+// extractGroup keeps the generated index aligned with the source-level grouping annotation.
 func extractGroup(group *ast.CommentGroup) string {
 	for _, c := range group.List {
 		line := strings.TrimSpace(strings.TrimPrefix(c.Text, "//"))
@@ -180,6 +189,7 @@ func extractGroup(group *ast.CommentGroup) string {
 	return "Other"
 }
 
+// extractBehavior preserves behavior metadata for libraries that annotate mutation semantics.
 func extractBehavior(group *ast.CommentGroup) string {
 	for _, c := range group.List {
 		line := strings.TrimSpace(strings.TrimPrefix(c.Text, "//"))
@@ -190,6 +200,7 @@ func extractBehavior(group *ast.CommentGroup) string {
 	return ""
 }
 
+// extractFluent preserves fluent metadata without making it part of rendered prose.
 func extractFluent(group *ast.CommentGroup) string {
 	for _, c := range group.List {
 		line := strings.TrimSpace(strings.TrimPrefix(c.Text, "//"))
@@ -200,17 +211,18 @@ func extractFluent(group *ast.CommentGroup) string {
 	return ""
 }
 
+// extractDescription keeps explanatory prose regardless of where generator annotations appear.
 func extractDescription(group *ast.CommentGroup) string {
 	var lines []string
 
 	for _, c := range group.List {
 		line := strings.TrimSpace(strings.TrimPrefix(c.Text, "//"))
 
-		if exampleHeader.MatchString(line) ||
-			groupHeader.MatchString(line) ||
-			behaviorHeader.MatchString(line) ||
-			fluentHeader.MatchString(line) {
+		if exampleHeader.MatchString(line) {
 			break
+		}
+		if strings.HasPrefix(line, "@") {
+			continue
 		}
 
 		if len(lines) == 0 && line == "" {
@@ -223,6 +235,7 @@ func extractDescription(group *ast.CommentGroup) string {
 	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
+// extractExamples retains source positions so rendered examples remain in declaration order.
 func extractExamples(fset *token.FileSet, fn *ast.FuncDecl) []Example {
 	var out []Example
 	var current []string
@@ -320,6 +333,7 @@ func selectPackage(pkgs map[string]*ast.Package) (string, error) {
 // ------------------------------------------------------------
 //
 
+// renderAPI emits deterministic groups and links so repeated generation produces stable Markdown.
 func renderAPI(funcs []*FuncDoc) string {
 	byGroup := map[string][]*FuncDoc{}
 
@@ -400,6 +414,7 @@ func renderAPI(funcs []*FuncDoc) string {
 // ------------------------------------------------------------
 //
 
+// replaceAPISection limits generated writes to the explicit API marker boundary.
 func replaceAPISection(readme, api string) (string, error) {
 	start := strings.Index(readme, apiStart)
 	end := strings.Index(readme, apiEnd)
@@ -418,16 +433,31 @@ func replaceAPISection(readme, api string) (string, error) {
 	return out.String(), nil
 }
 
+// countTests includes library and documentation tests while respecting module boundaries.
 func countTests(root string) (int, error) {
+	libraryTests, err := countTestsIn(root)
+	if err != nil {
+		return 0, err
+	}
+	documentationTests, err := countTestsIn(filepath.Join(root, "docs"))
+	if err != nil {
+		return 0, err
+	}
+
+	return libraryTests + documentationTests, nil
+}
+
+// countTestsIn uses one module's JSON event stream so subtests and top-level tests are counted consistently.
+func countTestsIn(directory string) (int, error) {
 	cmd := exec.Command("go", "test", "./...", "-run", "Test", "-count=1", "-json")
-	cmd.Dir = root
+	cmd.Dir = directory
 
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 
 	if err := cmd.Run(); err != nil {
-		return 0, fmt.Errorf("go test -json: %w\n%s", err, out.String())
+		return 0, fmt.Errorf("go test -json in %s: %w\n%s", directory, err, out.String())
 	}
 
 	var total int
@@ -451,6 +481,7 @@ func countTests(root string) (int, error) {
 
 var testsBadgePattern = regexp.MustCompile(`tests-\d+-brightgreen`)
 
+// updateTestsSection limits badge updates to the explicit test-count marker boundary.
 func updateTestsSection(readme string, tests int) (string, error) {
 	start := strings.Index(readme, testCountStart)
 	end := strings.Index(readme, testCountEnd)
@@ -479,23 +510,33 @@ func updateTestsSection(readme string, tests int) (string, error) {
 // ------------------------------------------------------------
 //
 
+// findRoot skips nested module boundaries because README generation always targets the parent library module.
 func findRoot() (string, error) {
-	wd, _ := os.Getwd()
-	if fileExists(filepath.Join(wd, "go.mod")) {
-		return wd, nil
+	workingDirectory, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("get working directory: %w", err)
 	}
-	parent := filepath.Join(wd, "..")
-	if fileExists(filepath.Join(parent, "go.mod")) {
-		return filepath.Clean(parent), nil
+
+	for candidate := workingDirectory; ; candidate = filepath.Dir(candidate) {
+		if fileExists(filepath.Join(candidate, "go.mod")) && fileExists(filepath.Join(candidate, "execx.go")) {
+			return filepath.Clean(candidate), nil
+		}
+		parent := filepath.Dir(candidate)
+		if parent == candidate {
+			break
+		}
 	}
-	return "", fmt.Errorf("could not find project root")
+
+	return "", fmt.Errorf("could not find library module root")
 }
 
-func fileExists(p string) bool {
-	_, err := os.Stat(p)
+// fileExists reports whether path is accessible while probing repository roots.
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
 	return err == nil
 }
 
+// normalizeIndent removes comment indentation without disturbing relative example formatting.
 func normalizeIndent(lines []string) []string {
 	min := -1
 

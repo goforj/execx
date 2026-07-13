@@ -1,12 +1,9 @@
-//go:build ignore
-// +build ignore
-
 package main
 
 import (
-	"os/exec"
-
 	"github.com/goforj/execx"
+	"os/exec"
+	"syscall"
 )
 
 func main() {
@@ -15,7 +12,7 @@ func main() {
 	// Example: exec cmd
 	_, _ = execx.Command("printf", "hi").
 		OnExecCmd(func(cmd *exec.Cmd) {
-			cmd.Env = append(cmd.Env, "EXAMPLE=1")
+			cmd.SysProcAttr = &syscall.SysProcAttr{}
 		}).
 		Run()
 }

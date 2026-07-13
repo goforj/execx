@@ -1,6 +1,3 @@
-//go:build ignore
-// +build ignore
-
 package main
 
 import (
@@ -11,6 +8,9 @@ import (
 
 func main() {
 	// StderrWriter sets a raw writer for stderr.
+	//
+	// When the writer is a terminal and no line callbacks or combined output are enabled,
+	// execx passes stderr through directly and does not buffer it for results.
 
 	// Example: stderr writer
 	var out strings.Builder

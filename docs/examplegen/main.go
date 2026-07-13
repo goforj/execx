@@ -1,12 +1,11 @@
-//go:build ignore
-// +build ignore
-
+// Command examplegen keeps runnable examples synchronized with execx GoDoc.
 package main
 
 import (
 	"bytes"
 	"fmt"
 	"go/ast"
+	"go/format"
 	"go/parser"
 	"go/token"
 	"os"
@@ -16,6 +15,7 @@ import (
 	"strings"
 )
 
+// main exits non-zero so watcher and CI invocations cannot silently accept stale generation.
 func main() {
 	if err := run(); err != nil {
 		fmt.Println("Error:", err)
@@ -24,6 +24,7 @@ func main() {
 	fmt.Println("✔ Examples generated in ./examples/")
 }
 
+// run rebuilds every GoDoc-backed example against one consistent library snapshot.
 func run() error {
 	root, err := findRoot()
 	if err != nil {
@@ -58,7 +59,14 @@ func run() error {
 
 	funcs := map[string]*FuncDoc{}
 
-	for filename, file := range pkg.Files {
+	filenames := make([]string, 0, len(pkg.Files))
+	for filename := range pkg.Files {
+		filenames = append(filenames, filename)
+	}
+	sort.Strings(filenames)
+
+	for _, filename := range filenames {
+		file := pkg.Files[filename]
 		if strings.Contains(filename, "_test.go") {
 			continue
 		}
@@ -88,20 +96,33 @@ func run() error {
 	return nil
 }
 
+// findRoot skips nested module boundaries because generation always targets the parent library module.
 func findRoot() (string, error) {
-	wd, _ := os.Getwd()
-	if fileExists(filepath.Join(wd, "go.mod")) {
-		return wd, nil
+	workingDirectory, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("get working directory: %w", err)
 	}
-	parent := filepath.Join(wd, "..")
-	if fileExists(filepath.Join(parent, "go.mod")) {
-		return filepath.Clean(parent), nil
+
+	for candidate := workingDirectory; ; candidate = filepath.Dir(candidate) {
+		if fileExists(filepath.Join(candidate, "go.mod")) && fileExists(filepath.Join(candidate, "execx.go")) {
+			return filepath.Clean(candidate), nil
+		}
+		parent := filepath.Dir(candidate)
+		if parent == candidate {
+			break
+		}
 	}
-	return "", fmt.Errorf("could not find project root")
+
+	return "", fmt.Errorf("could not find library module root")
 }
 
-func fileExists(p string) bool { _, err := os.Stat(p); return err == nil }
+// fileExists reports whether path is accessible while probing repository roots.
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
 
+// modulePath reads the parent module path so generated imports never depend on a hard-coded checkout.
 func modulePath(root string) (string, error) {
 	data, err := os.ReadFile(filepath.Join(root, "go.mod"))
 	if err != nil {
@@ -153,6 +174,7 @@ type docLine struct {
 	pos  token.Pos
 }
 
+// extractFuncDocs merges platform-specific declarations because one API may have several build-tagged implementations.
 func extractFuncDocs(
 	fset *token.FileSet,
 	filename string,
@@ -183,6 +205,7 @@ func extractFuncDocs(
 	return out
 }
 
+// extractGroup keeps the generated index aligned with the source-level grouping annotation.
 func extractGroup(group *ast.CommentGroup) string {
 	lines := docLines(group)
 
@@ -196,6 +219,7 @@ func extractGroup(group *ast.CommentGroup) string {
 	return "Other"
 }
 
+// extractFuncDescription keeps explanatory prose regardless of where generator annotations appear.
 func extractFuncDescription(group *ast.CommentGroup) string {
 	lines := docLines(group)
 	var desc []string
@@ -203,9 +227,11 @@ func extractFuncDescription(group *ast.CommentGroup) string {
 	for _, dl := range lines {
 		trimmed := strings.TrimSpace(dl.text)
 
-		// Stop before Example or @group
-		if exampleHeader.MatchString(trimmed) || groupHeader.MatchString(trimmed) {
+		if exampleHeader.MatchString(trimmed) {
 			break
+		}
+		if strings.HasPrefix(trimmed, "@") {
+			continue
 		}
 
 		if len(desc) == 0 && trimmed == "" {
@@ -222,6 +248,7 @@ func extractFuncDescription(group *ast.CommentGroup) string {
 	return strings.Join(desc, "\n")
 }
 
+// docLines retains source positions so examples can be rendered in declaration order.
 func docLines(group *ast.CommentGroup) []docLine {
 	var lines []docLine
 
@@ -246,6 +273,7 @@ func docLines(group *ast.CommentGroup) []docLine {
 	return lines
 }
 
+// extractBlocks preserves each labeled example as an independently ordered source fragment.
 func extractBlocks(
 	fset *token.FileSet,
 	filename, funcName string,
@@ -352,6 +380,7 @@ func selectPackage(pkgs map[string]*ast.Package) (string, error) {
 // ------------------------------------------------------------
 //
 
+// writeMain emits one directly runnable command inside the nested examples module.
 func writeMain(base string, fd *FuncDoc, importPath string) error {
 	if len(fd.Examples) == 0 {
 		return nil
@@ -367,10 +396,6 @@ func writeMain(base string, fd *FuncDoc, importPath string) error {
 	}
 
 	var buf bytes.Buffer
-
-	// Build tag
-	buf.WriteString("//go:build ignore\n")
-	buf.WriteString("// +build ignore\n\n")
 
 	buf.WriteString("package main\n\n")
 
@@ -390,6 +415,9 @@ func writeMain(base string, fd *FuncDoc, importPath string) error {
 		}
 		if strings.Contains(ex.Code, "os.") {
 			imports["os"] = true
+		}
+		if strings.Contains(ex.Code, "exec.") {
+			imports["os/exec"] = true
 		}
 		if strings.Contains(ex.Code, "context.") {
 			imports["context"] = true
@@ -447,15 +475,17 @@ func writeMain(base string, fd *FuncDoc, importPath string) error {
 
 	buf.WriteString("func main() {\n")
 
-	// Description
 	if fd.Description != "" {
 		for _, line := range strings.Split(fd.Description, "\n") {
+			if strings.TrimSpace(line) == "" {
+				buf.WriteString("\t//\n")
+				continue
+			}
 			buf.WriteString("\t// " + line + "\n")
 		}
 		buf.WriteString("\n")
 	}
 
-	// Examples
 	for _, ex := range fd.Examples {
 		if ex.Label != "" {
 			buf.WriteString("\t// Example: " + ex.Label + "\n")
@@ -474,5 +504,10 @@ func writeMain(base string, fd *FuncDoc, importPath string) error {
 
 	buf.WriteString("}\n")
 
-	return os.WriteFile(filepath.Join(dir, "main.go"), buf.Bytes(), 0o644)
+	source, err := format.Source(buf.Bytes())
+	if err != nil {
+		return fmt.Errorf("format %s example: %w", fd.Name, err)
+	}
+
+	return os.WriteFile(filepath.Join(dir, "main.go"), source, 0o644)
 }
