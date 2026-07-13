@@ -207,19 +207,20 @@ All public APIs are covered by runnable examples under `./examples`, and the tes
 |------:|:-----------|
 | **Arguments** | [Arg](#arg) |
 | **Construction** | [Command](#command) |
-| **Context** | [WithContext](#withcontext) [WithDeadline](#withdeadline) [WithTimeout](#withtimeout) |
-| **Debugging** | [Args](#args) [ShellEscaped](#shellescaped) [String](#string) |
-| **Decoding** | [Decode](#decode) [DecodeJSON](#decodejson) [DecodeWith](#decodewith) [DecodeYAML](#decodeyaml) [FromCombined](#fromcombined) [FromStderr](#fromstderr) [FromStdout](#fromstdout) [Into](#into) [Trim](#trim) |
-| **Environment** | [Env](#env) [EnvAppend](#envappend) [EnvInherit](#envinherit) [EnvList](#envlist) [EnvOnly](#envonly) |
-| **Errors** | [Error](#error) [Unwrap](#unwrap) |
-| **Execution** | [CombinedOutput](#combinedoutput) [Output](#output) [OutputBytes](#outputbytes) [OutputTrimmed](#outputtrimmed) [Run](#run) [Start](#start) [OnExecCmd](#onexeccmd) |
-| **Input** | [StdinBytes](#stdinbytes) [StdinFile](#stdinfile) [StdinReader](#stdinreader) [StdinString](#stdinstring) |
-| **OS Controls** | [CreationFlags](#creationflags) [HideWindow](#hidewindow) [Pdeathsig](#pdeathsig) [Setpgid](#setpgid) [Setsid](#setsid) |
-| **Pipelining** | [Pipe](#pipe) [PipeBestEffort](#pipebesteffort) [PipeStrict](#pipestrict) [PipelineResults](#pipelineresults) |
-| **Process** | [GracefulShutdown](#gracefulshutdown) [Interrupt](#interrupt) [KillAfter](#killafter) [Send](#send) [Terminate](#terminate) [Wait](#wait) |
-| **Results** | [IsExitCode](#isexitcode) [IsSignal](#issignal) [OK](#ok) |
-| **Shadow Print** | [ShadowOff](#shadowoff) [ShadowOn](#shadowon) [ShadowPrint](#shadowprint) [WithFormatter](#withformatter) [WithMask](#withmask) [WithPrefix](#withprefix) |
-| **Streaming** | [OnStderr](#onstderr) [OnStdout](#onstdout) [StderrWriter](#stderrwriter) [StdoutWriter](#stdoutwriter) [WithPTY](#withpty) |
+| **Context** | [WithContext](#withcontext) · [WithDeadline](#withdeadline) · [WithTimeout](#withtimeout) |
+| **Debugging** | [Args](#args) · [ShellEscaped](#shellescaped) · [String](#string) |
+| **Decoding** | [Decode](#decode) · [DecodeJSON](#decodejson) · [DecodeWith](#decodewith) · [DecodeYAML](#decodeyaml) · [FromCombined](#fromcombined) · [FromStderr](#fromstderr) · [FromStdout](#fromstdout) · [Into](#into) · [Trim](#trim) |
+| **Environment** | [Env](#env) · [EnvAppend](#envappend) · [EnvInherit](#envinherit) · [EnvList](#envlist) · [EnvOnly](#envonly) |
+| **Errors** | [Error](#error) · [Unwrap](#unwrap) |
+| **Execution** | [CombinedOutput](#combinedoutput) · [OnExecCmd](#onexeccmd) · [Output](#output) · [OutputBytes](#outputbytes) · [OutputTrimmed](#outputtrimmed) · [Run](#run) · [Start](#start) |
+| **Input** | [StdinBytes](#stdinbytes) · [StdinFile](#stdinfile) · [StdinReader](#stdinreader) · [StdinString](#stdinstring) |
+| **OS Controls** | [CreationFlags](#creationflags) · [HideWindow](#hidewindow) · [Pdeathsig](#pdeathsig) · [Setpgid](#setpgid) · [Setsid](#setsid) |
+| **Other** | [Write](#write) |
+| **Pipelining** | [Pipe](#pipe) · [PipeBestEffort](#pipebesteffort) · [PipeStrict](#pipestrict) · [PipelineResults](#pipelineresults) |
+| **Process** | [GracefulShutdown](#gracefulshutdown) · [Interrupt](#interrupt) · [KillAfter](#killafter) · [Send](#send) · [Terminate](#terminate) · [Wait](#wait) |
+| **Results** | [IsExitCode](#isexitcode) · [IsSignal](#issignal) · [OK](#ok) |
+| **Shadow Print** | [ShadowOff](#shadowoff) · [ShadowOn](#shadowon) · [ShadowPrint](#shadowprint) · [WithFormatter](#withformatter) · [WithMask](#withmask) · [WithPrefix](#withprefix) |
+| **Streaming** | [OnStderr](#onstderr) · [OnStdout](#onstdout) · [StderrWriter](#stderrwriter) · [StdoutWriter](#stdoutwriter) · [WithPTY](#withpty) |
 | **WorkingDir** | [Dir](#dir) |
 
 
@@ -569,6 +570,18 @@ fmt.Println(err == nil)
 // false
 ```
 
+### <a id="onexeccmd"></a>OnExecCmd
+
+OnExecCmd registers a callback to mutate the underlying exec.Cmd before start.
+
+```go
+_, _ = execx.Command("printf", "hi").
+	OnExecCmd(func(cmd *exec.Cmd) {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}).
+	Run()
+```
+
 ### <a id="output"></a>Output
 
 Output executes the command and returns stdout and any error.
@@ -618,18 +631,6 @@ proc := execx.Command("go", "env", "GOOS").Start()
 res, _ := proc.Wait()
 fmt.Println(res.ExitCode == 0)
 // #bool true
-```
-
-### <a id="onexeccmd"></a>OnExecCmd
-
-OnExecCmd registers a callback to mutate the underlying exec.Cmd before start.
-
-```go
-_, _ = execx.Command("printf", "hi").
-	OnExecCmd(func(cmd *exec.Cmd) {
-		cmd.Env = append(cmd.Env, "EXAMPLE=1")
-	}).
-	Run()
 ```
 
 ## Input
@@ -736,6 +737,12 @@ out, _ := execx.Command("printf", "ok").Setsid(true).Output()
 fmt.Print(out)
 // ok
 ```
+
+## Other
+
+### <a id="write"></a>Write
+
+Write buffers output and emits completed lines to the callback.
 
 ## Pipelining
 
@@ -1031,8 +1038,6 @@ _, _ = execx.Command("printf", "hi\n").
 
 StderrWriter sets a raw writer for stderr.
 
-When the writer is a terminal and no line callbacks or combined output are enabled, execx passes stderr through directly and does not buffer it for results.
-
 ```go
 var out strings.Builder
 _, err := execx.Command("go", "env", "-badflag").
@@ -1049,8 +1054,6 @@ fmt.Println(err == nil)
 ### <a id="stdoutwriter"></a>StdoutWriter
 
 StdoutWriter sets a raw writer for stdout.
-
-When the writer is a terminal and no line callbacks or combined output are enabled, execx passes stdout through directly and does not buffer it for results.
 
 ```go
 var out strings.Builder
