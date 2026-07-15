@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// main keeps the decode example executable so decoder API drift fails during compilation.
 func main() {
 	// Decode configures a custom decoder for this command.
 

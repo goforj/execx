@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+// main keeps this documented example executable so API drift fails during compilation.
 func main() {
 	// WithMask applies a masker to the shadow-printed command string.
 

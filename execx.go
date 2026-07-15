@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -54,16 +55,18 @@ func Command(name string, args ...string) *Cmd {
 	return cmd
 }
 
-// Cmd represents a single command invocation or a pipeline stage.
+// Cmd represents a single command invocation or a pipeline stage. Cmd is mutable
+// and must not be configured or executed concurrently.
 type Cmd struct {
 	name string
 	args []string
 
-	env     map[string]string
-	envMode envMode
-	ctx     context.Context
-	cancel  context.CancelFunc
-	dir     string
+	env       map[string]string
+	envMode   envMode
+	ctx       context.Context
+	ctxParent context.Context
+	cancel    context.CancelFunc
+	dir       string
 
 	stdin io.Reader
 
@@ -215,7 +218,8 @@ func (c *Cmd) Dir(path string) *Cmd {
 	return c
 }
 
-// WithContext binds the command to a context.
+// WithContext binds the command to a context. A nil context is normalized to
+// context.Background when execution begins.
 // @group Context
 //
 // Example: with context
@@ -231,10 +235,12 @@ func (c *Cmd) WithContext(ctx context.Context) *Cmd {
 		c.cancel = nil
 	}
 	c.ctx = ctx
+	c.ctxParent = nil
 	return c
 }
 
-// WithTimeout binds the command to a timeout.
+// WithTimeout binds the command to a timeout. Replacing a timeout retains the
+// context previously supplied through WithContext as its parent.
 // @group Context
 //
 // Example: with timeout
@@ -243,20 +249,18 @@ func (c *Cmd) WithContext(ctx context.Context) *Cmd {
 //	fmt.Println(res.ExitCode == 0)
 //	// #bool true
 func (c *Cmd) WithTimeout(d time.Duration) *Cmd {
-	parent := c.ctx
+	parent := c.baseContext()
 	if c.cancel != nil {
 		c.cancel()
 		c.cancel = nil
-		parent = nil
 	}
-	if parent == nil || parent.Err() != nil {
-		parent = context.Background()
-	}
+	c.ctxParent = parent
 	c.ctx, c.cancel = context.WithTimeout(parent, d)
 	return c
 }
 
-// WithDeadline binds the command to a deadline.
+// WithDeadline binds the command to a deadline. Replacing a deadline retains the
+// context previously supplied through WithContext as its parent.
 // @group Context
 //
 // Example: with deadline
@@ -265,15 +269,12 @@ func (c *Cmd) WithTimeout(d time.Duration) *Cmd {
 //	fmt.Println(res.ExitCode == 0)
 //	// #bool true
 func (c *Cmd) WithDeadline(t time.Time) *Cmd {
-	parent := c.ctx
+	parent := c.baseContext()
 	if c.cancel != nil {
 		c.cancel()
 		c.cancel = nil
-		parent = nil
 	}
-	if parent == nil || parent.Err() != nil {
-		parent = context.Background()
-	}
+	c.ctxParent = parent
 	c.ctx, c.cancel = context.WithDeadline(parent, t)
 	return c
 }
@@ -293,7 +294,8 @@ func (c *Cmd) StdinString(input string) *Cmd {
 	return c
 }
 
-// StdinBytes sets stdin from bytes.
+// StdinBytes sets stdin from a copy of bytes so later caller mutation cannot
+// change the command input.
 // @group Input
 //
 // Example: stdin bytes
@@ -304,7 +306,7 @@ func (c *Cmd) StdinString(input string) *Cmd {
 //	fmt.Println(out)
 //	// #string hi
 func (c *Cmd) StdinBytes(input []byte) *Cmd {
-	c.stdin = bytes.NewReader(input)
+	c.stdin = bytes.NewReader(append([]byte(nil), input...))
 	return c
 }
 
@@ -341,7 +343,9 @@ func (c *Cmd) StdinFile(file *os.File) *Cmd {
 	return c
 }
 
-// OnStdout registers a line callback for stdout.
+// OnStdout registers a line callback for stdout. The final unterminated line is
+// delivered after the process exits. Output callbacks and writers are serialized
+// across one pipeline.
 // @group Streaming
 //
 // Example: stdout lines
@@ -355,7 +359,9 @@ func (c *Cmd) OnStdout(fn func(string)) *Cmd {
 	return c
 }
 
-// OnStderr registers a line callback for stderr.
+// OnStderr registers a line callback for stderr. The final unterminated line is
+// delivered after the process exits. Output callbacks and writers are serialized
+// across one pipeline.
 // @group Streaming
 //
 // Example: stderr lines
@@ -380,6 +386,7 @@ func (c *Cmd) OnStderr(fn func(string)) *Cmd {
 //
 // When the writer is a terminal and no line callbacks or combined output are enabled,
 // execx passes stdout through directly and does not buffer it for results.
+// Writer failures are returned as ErrExec after already received bytes are captured.
 //
 // Example: stdout writer
 //
@@ -399,6 +406,7 @@ func (c *Cmd) StdoutWriter(w io.Writer) *Cmd {
 //
 // When the writer is a terminal and no line callbacks or combined output are enabled,
 // execx passes stderr through directly and does not buffer it for results.
+// Writer failures are returned as ErrExec after already received bytes are captured.
 //
 // Example: stderr writer
 //
@@ -436,7 +444,9 @@ func (c *Cmd) WithPTY() *Cmd {
 	return c
 }
 
-// OnExecCmd registers a callback to mutate the underlying exec.Cmd before start.
+// OnExecCmd registers a callback to mutate the underlying exec.Cmd before execx
+// attaches its stdin, output capture, and pipeline wiring. Use it for fields such
+// as SysProcAttr; execx owns Stdin, Stdout, and Stderr during execution.
 // @group Execution
 //
 // Example: exec cmd
@@ -452,6 +462,8 @@ func (c *Cmd) OnExecCmd(fn func(*exec.Cmd)) *Cmd {
 }
 
 // Pipe appends a new command to the pipeline. Pipelines run on all platforms.
+// Configuration called on the returned Cmd applies to the new stage; configure
+// the current stage before Pipe when it needs different environment, context, or I/O.
 // @group Pipelining
 //
 // Example: pipe
@@ -478,7 +490,8 @@ func (c *Cmd) Pipe(name string, args ...string) *Cmd {
 	return next
 }
 
-// PipeStrict sets strict pipeline semantics (stop on first failure).
+// PipeStrict selects the first stage with an execution error or non-zero exit as
+// the primary result. Every stage is still started concurrently.
 // @group Pipelining
 //
 // Example: strict
@@ -494,7 +507,8 @@ func (c *Cmd) PipeStrict() *Cmd {
 	return c
 }
 
-// PipeBestEffort sets best-effort pipeline semantics (run all stages, surface the first error).
+// PipeBestEffort selects the last stage as the primary result while surfacing the
+// first execution error. Every stage is started concurrently.
 // @group Pipelining
 //
 // Example: best effort
@@ -699,7 +713,8 @@ func WithFormatter(fn func(ShadowEvent) string) ShadowOption {
 	}
 }
 
-// Run executes the command and returns the result and any error.
+// Run executes the command and returns the result and any execution error. A
+// non-zero exit code is represented in Result and does not itself produce an error.
 // @group Execution
 //
 // Example: run
@@ -759,7 +774,9 @@ func (c *Cmd) OutputTrimmed() (string, error) {
 	return strings.TrimSpace(result.Stdout), err
 }
 
-// CombinedOutput executes the command and returns stdout+stderr and any error.
+// CombinedOutput executes the command and returns stdout and stderr in observed
+// chunk order plus any execution error. Exact byte interleaving between the two
+// operating-system streams is inherently scheduler-dependent.
 // @group Execution
 //
 // Example: combined output
@@ -784,7 +801,8 @@ func (c *Cmd) CombinedOutput() (string, error) {
 	return combined, result.Err
 }
 
-// PipelineResults executes the command and returns per-stage results and any error.
+// PipelineResults executes the command and returns per-stage results and the first
+// execution error. Non-zero exit codes remain data in their corresponding Result.
 // @group Pipelining
 //
 // Example: pipeline results
@@ -810,7 +828,8 @@ func (c *Cmd) PipelineResults() ([]Result, error) {
 	return results, firstResultErr(results)
 }
 
-// Start executes the command asynchronously.
+// Start executes the command asynchronously. Startup still completes synchronously,
+// so a returned Process represents either a fully started pipeline or a completed error.
 // @group Execution
 //
 // Example: start
@@ -843,6 +862,7 @@ func (c *Cmd) Start() *Process {
 	return proc
 }
 
+// ctxOrBackground normalizes an omitted context at the os/exec boundary.
 func (c *Cmd) ctxOrBackground() context.Context {
 	if c.ctx == nil {
 		return context.Background()
@@ -850,6 +870,18 @@ func (c *Cmd) ctxOrBackground() context.Context {
 	return c.ctx
 }
 
+// baseContext keeps replacement timeouts attached to the context that originally owned them.
+func (c *Cmd) baseContext() context.Context {
+	if c.cancel != nil && c.ctxParent != nil {
+		return c.ctxParent
+	}
+	if c.ctx != nil {
+		return c.ctx
+	}
+	return context.Background()
+}
+
+// rootCmd resolves chain-wide options without requiring callers to retain the first stage.
 func (c *Cmd) rootCmd() *Cmd {
 	if c.root != nil {
 		return c.root
@@ -857,6 +889,7 @@ func (c *Cmd) rootCmd() *Cmd {
 	return c
 }
 
+// execCmd creates a fresh standard-library command for one execution attempt.
 func (c *Cmd) execCmd() *exec.Cmd {
 	cmd := exec.CommandContext(c.ctxOrBackground(), c.name, c.args...)
 	if c.dir != "" {
@@ -876,6 +909,7 @@ var isTerminalFunc = term.IsTerminal
 var openPTYFunc = openPTY
 var ptyCheckFunc = ptyCheck
 
+// isTerminalWriter identifies direct file-backed terminal output eligible for passthrough.
 func isTerminalWriter(w io.Writer) bool {
 	f, ok := w.(*os.File)
 	if !ok {
@@ -884,6 +918,7 @@ func isTerminalWriter(w io.Writer) bool {
 	return isTerminalFunc(int(f.Fd()))
 }
 
+// validatePTY rejects unsupported combinations before any subprocess starts.
 func (c *Cmd) validatePTY() error {
 	root := c.rootCmd()
 	if !root.usePTY {
@@ -898,74 +933,107 @@ func (c *Cmd) validatePTY() error {
 	return nil
 }
 
+// stdoutWriter preserves the original helper boundary for focused writer tests.
 func (c *Cmd) stdoutWriter(buf *bytes.Buffer, withCombined bool, combined *bytes.Buffer, shadow *shadowContext) io.Writer {
+	out, _ := c.stdoutWriterWithFlush(buf, withCombined, combined, shadow)
+	return out
+}
+
+// stdoutWriterWithFlush builds stdout fan-out and retains the callback's final-line flush.
+func (c *Cmd) stdoutWriterWithFlush(buf *bytes.Buffer, withCombined bool, combined io.Writer, shadow *shadowContext) (io.Writer, func()) {
 	if c.stdoutW != nil && c.onStdout == nil && !withCombined {
 		if isTerminalWriter(c.stdoutW) {
-			return c.stdoutW
+			return c.stdoutW, nil
 		}
 	}
-	writers := []io.Writer{}
-	if c.stdoutW != nil {
-		writers = append(writers, c.stdoutW)
-	}
-	writers = append(writers, buf)
+	writers := []io.Writer{buf}
 	if withCombined {
 		writers = append(writers, combined)
 	}
+	if c.stdoutW != nil {
+		writers = append(writers, c.stdoutW)
+	}
+	var flush func()
 	if c.onStdout != nil {
-		writers = append(writers, &lineWriter{onLine: c.onStdout})
+		lines := &lineWriter{onLine: c.onStdout}
+		writers = append(writers, lines)
+		flush = lines.Flush
 	}
 	var out io.Writer = buf
 	if len(writers) > 1 {
 		out = io.MultiWriter(writers...)
 	}
-	return wrapShadowWriter(out, shadow)
+	return wrapShadowWriter(out, shadow), flush
 }
 
+// stderrWriter preserves the original helper boundary for focused writer tests.
 func (c *Cmd) stderrWriter(buf *bytes.Buffer, withCombined bool, combined *bytes.Buffer, shadow *shadowContext) io.Writer {
+	out, _ := c.stderrWriterWithFlush(buf, withCombined, combined, shadow)
+	return out
+}
+
+// stderrWriterWithFlush builds stderr fan-out and retains the callback's final-line flush.
+func (c *Cmd) stderrWriterWithFlush(buf *bytes.Buffer, withCombined bool, combined io.Writer, shadow *shadowContext) (io.Writer, func()) {
 	if c.stderrW != nil && c.onStderr == nil && !withCombined {
 		if isTerminalWriter(c.stderrW) {
-			return c.stderrW
+			return c.stderrW, nil
 		}
 	}
-	writers := []io.Writer{}
+	writers := []io.Writer{buf}
+	if withCombined {
+		writers = append(writers, combined)
+	}
 	if c.stderrW != nil {
 		writers = append(writers, c.stderrW)
 	}
-	writers = append(writers, buf)
-	if withCombined {
-		writers = append(writers, combined)
-	}
+	var flush func()
 	if c.onStderr != nil {
-		writers = append(writers, &lineWriter{onLine: c.onStderr})
+		lines := &lineWriter{onLine: c.onStderr}
+		writers = append(writers, lines)
+		flush = lines.Flush
 	}
 	var out io.Writer = buf
 	if len(writers) > 1 {
 		out = io.MultiWriter(writers...)
 	}
-	return wrapShadowWriter(out, shadow)
+	return wrapShadowWriter(out, shadow), flush
 }
 
-func (c *Cmd) ptyWriter(buf *bytes.Buffer, withCombined bool, combined *bytes.Buffer, shadow *shadowContext) io.Writer {
-	writers := []io.Writer{}
+// ptyWriterWithFlush builds merged PTY fan-out and retains the callback's final-line flush.
+func (c *Cmd) ptyWriterWithFlush(buf *bytes.Buffer, withCombined bool, combined io.Writer, shadow *shadowContext) (io.Writer, func()) {
+	writers := []io.Writer{buf}
+	if withCombined {
+		writers = append(writers, combined)
+	}
 	if c.stdoutW != nil {
 		writers = append(writers, c.stdoutW)
 	}
-	if c.stderrW != nil && c.stderrW != c.stdoutW {
+	if c.stderrW != nil && !sameWriter(c.stderrW, c.stdoutW) {
 		writers = append(writers, c.stderrW)
 	}
-	writers = append(writers, buf)
-	if withCombined {
-		writers = append(writers, combined)
-	}
+	var flush func()
 	if c.onStdout != nil || c.onStderr != nil {
-		writers = append(writers, &ptyLineWriter{onStdout: c.onStdout, onStderr: c.onStderr})
+		lines := &ptyLineWriter{onStdout: c.onStdout, onStderr: c.onStderr}
+		writers = append(writers, lines)
+		flush = lines.Flush
 	}
 	var out io.Writer = buf
 	if len(writers) > 1 {
 		out = io.MultiWriter(writers...)
 	}
-	return wrapShadowWriter(out, shadow)
+	return wrapShadowWriter(out, shadow), flush
+}
+
+// sameWriter avoids interface-comparison panics for writer implementations with non-comparable values.
+func sameWriter(left io.Writer, right io.Writer) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	leftType := reflect.TypeOf(left)
+	if leftType != reflect.TypeOf(right) || !leftType.Comparable() {
+		return false
+	}
+	return left == right
 }
 
 type lineWriter struct {
@@ -989,6 +1057,16 @@ func (l *lineWriter) Write(p []byte) (int, error) {
 		_ = l.buf.WriteByte(b)
 	}
 	return len(p), nil
+}
+
+// Flush emits a final unterminated line after the command closes its output stream.
+func (l *lineWriter) Flush() {
+	if l.onLine == nil || l.buf.Len() == 0 {
+		return
+	}
+	line := strings.TrimSuffix(l.buf.String(), "\r")
+	l.buf.Reset()
+	l.onLine(line)
 }
 
 type ptyLineWriter struct {
@@ -1020,6 +1098,22 @@ func (l *ptyLineWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// Flush emits a final unterminated PTY line to both configured callbacks.
+func (l *ptyLineWriter) Flush() {
+	if l.buf.Len() == 0 {
+		return
+	}
+	line := strings.TrimSuffix(l.buf.String(), "\r")
+	l.buf.Reset()
+	if l.onStdout != nil {
+		l.onStdout(line)
+	}
+	if l.onStderr != nil {
+		l.onStderr(line)
+	}
+}
+
+// buildEnv sorts the merged environment so inspection and execution use deterministic input.
 func buildEnv(mode envMode, env map[string]string) []string {
 	merged := map[string]string{}
 	if mode != envOnly {
@@ -1043,6 +1137,7 @@ func buildEnv(mode envMode, env map[string]string) []string {
 	return list
 }
 
+// firstResultErr preserves stage order when reporting pipeline execution errors.
 func firstResultErr(results []Result) error {
 	for _, res := range results {
 		if res.Err != nil {
@@ -1054,6 +1149,7 @@ func firstResultErr(results []Result) error {
 
 var shellEscapePattern = regexp.MustCompile(`[^\w@%+=:,./-]`)
 
+// shellEscape produces a POSIX-oriented display form that is never used for execution.
 func shellEscape(arg string) string {
 	if arg == "" {
 		return "''"
@@ -1090,11 +1186,16 @@ const (
 
 // ShadowEvent captures details for ShadowPrint formatting.
 type ShadowEvent struct {
-	Command    string
+	// Command contains the display command after masking.
+	Command string
+	// RawCommand contains the unmasked display command and may include secrets.
 	RawCommand string
-	Phase      ShadowPhase
-	Duration   time.Duration
-	Async      bool
+	// Phase distinguishes output before execution from output after completion.
+	Phase ShadowPhase
+	// Duration contains elapsed execution time for ShadowAfter events.
+	Duration time.Duration
+	// Async reports whether execution was started through Start.
+	Async bool
 }
 
 // ShadowOption configures ShadowPrint behavior.
@@ -1106,10 +1207,12 @@ type shadowConfig struct {
 	formatter func(ShadowEvent) string
 }
 
+// defaultShadowConfig centralizes presentation defaults for first-time and resumed shadow output.
 func defaultShadowConfig() shadowConfig {
 	return shadowConfig{prefix: "execx"}
 }
 
+// shadowPrintStart snapshots timing and formatting state before execution begins.
 func (c *Cmd) shadowPrintStart(async bool) *shadowContext {
 	root := c.rootCmd()
 	if root == nil || !root.shadowPrint {
@@ -1127,6 +1230,7 @@ func (c *Cmd) shadowPrintStart(async bool) *shadowContext {
 	return ctx
 }
 
+// shadowCommand renders every stage because shadow output describes the whole pipeline.
 func (c *Cmd) shadowCommand() string {
 	root := c.rootCmd()
 	parts := []string{}
@@ -1136,6 +1240,7 @@ func (c *Cmd) shadowCommand() string {
 	return strings.Join(parts, " | ")
 }
 
+// finish preserves visual separation before printing the terminal shadow event.
 func (s *shadowContext) finish() {
 	if s == nil || s.cmd == nil {
 		return
@@ -1159,6 +1264,7 @@ type shadowOutputWriter struct {
 	w   io.Writer
 }
 
+// wrapShadowWriter tracks output only when the default formatter owns spacing.
 func wrapShadowWriter(out io.Writer, shadow *shadowContext) io.Writer {
 	if shadow != nil && shadow.spacing {
 		return &shadowOutputWriter{ctx: shadow, w: out}
@@ -1183,6 +1289,7 @@ func (s *shadowOutputWriter) Write(p []byte) (int, error) {
 	return s.w.Write(p)
 }
 
+// shadowPrintLine routes an event through custom formatting or the default terminal presentation.
 func shadowPrintLine(cmd *Cmd, phase ShadowPhase, duration time.Duration, async bool) {
 	if cmd == nil {
 		return
@@ -1233,7 +1340,8 @@ func shadowPrintLine(cmd *Cmd, phase ShadowPhase, duration time.Duration, async 
 	)
 }
 
-// Process represents an asynchronously running command.
+// Process represents an asynchronously running command. Its process-control and
+// Wait methods may be called from separate goroutines.
 type Process struct {
 	pipeline *pipeline
 	mode     pipeMode
@@ -1356,6 +1464,7 @@ func (p *Process) GracefulShutdown(sig os.Signal, timeout time.Duration) error {
 	return nil
 }
 
+// finish publishes one immutable result and closes the synchronization channel exactly once.
 func (p *Process) finish(result Result) {
 	p.resultOnce.Do(func() {
 		p.result = result
@@ -1364,6 +1473,7 @@ func (p *Process) finish(result Result) {
 	})
 }
 
+// signalAll applies process control to each started pipeline stage while retaining the first failure.
 func (p *Process) signalAll(send func(*os.Process) error) error {
 	if p == nil || p.pipeline == nil {
 		return errors.New("process not started")

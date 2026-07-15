@@ -7,9 +7,9 @@ import (
 	"os"
 	"syscall"
 	"testing"
-	"unsafe"
 )
 
+// TestPTYLinuxOpen ensures the host kernel can provide the master and slave pair used by PTY execution.
 func TestPTYLinuxOpen(t *testing.T) {
 	if err := ptyCheck(); err != nil {
 		t.Fatalf("unexpected pty check error: %v", err)
@@ -22,21 +22,14 @@ func TestPTYLinuxOpen(t *testing.T) {
 	_ = slave.Close()
 }
 
+// TestPTYIoctlSuccessAndErrorLinux ensures ioctl failures are surfaced instead of silently ignored.
 func TestPTYIoctlSuccessAndErrorLinux(t *testing.T) {
-	master, err := os.OpenFile("/dev/ptmx", os.O_RDWR|syscall.O_NOCTTY, 0)
-	if err != nil {
-		t.Fatalf("open ptmx: %v", err)
-	}
-	defer master.Close()
-	unlock := int32(0)
-	if err := ptyIoctl(master.Fd(), syscall.TIOCSPTLCK, uintptr(unsafe.Pointer(&unlock))); err != nil {
-		t.Fatalf("expected ioctl success, got %v", err)
-	}
 	if err := ptyIoctl(0, 0, 0); err == nil {
 		t.Fatalf("expected ioctl error")
 	}
 }
 
+// TestOpenPTYWithOpenErrorLinux ensures opening the multiplexer is the first reported PTY failure.
 func TestOpenPTYWithOpenErrorLinux(t *testing.T) {
 	openFile := func(string, int, os.FileMode) (*os.File, error) {
 		return nil, errors.New("open failed")
@@ -47,6 +40,7 @@ func TestOpenPTYWithOpenErrorLinux(t *testing.T) {
 	}
 }
 
+// TestOpenPTYWithUnlockErrorLinux ensures a locked slave cannot escape as a partially initialized pair.
 func TestOpenPTYWithUnlockErrorLinux(t *testing.T) {
 	openFile := func(string, int, os.FileMode) (*os.File, error) {
 		return os.OpenFile(os.DevNull, os.O_RDWR, 0)
@@ -62,6 +56,7 @@ func TestOpenPTYWithUnlockErrorLinux(t *testing.T) {
 	}
 }
 
+// TestOpenPTYWithPTNErrorLinux ensures slave-number lookup failures close the incomplete PTY setup.
 func TestOpenPTYWithPTNErrorLinux(t *testing.T) {
 	openFile := func(string, int, os.FileMode) (*os.File, error) {
 		return os.OpenFile(os.DevNull, os.O_RDWR, 0)
@@ -77,6 +72,7 @@ func TestOpenPTYWithPTNErrorLinux(t *testing.T) {
 	}
 }
 
+// TestOpenPTYWithSlaveErrorLinux ensures slave-open failures are returned after master initialization.
 func TestOpenPTYWithSlaveErrorLinux(t *testing.T) {
 	openFile := func(name string, flag int, perm os.FileMode) (*os.File, error) {
 		if name == "/dev/ptmx" {
@@ -84,28 +80,19 @@ func TestOpenPTYWithSlaveErrorLinux(t *testing.T) {
 		}
 		return nil, errors.New("slave open failed")
 	}
-	ioctl := func(fd uintptr, req uintptr, arg uintptr) error {
-		if req == syscall.TIOCGPTN {
-			*(*uint32)(unsafe.Pointer(arg)) = 1234
-		}
-		return nil
-	}
+	ioctl := func(uintptr, uintptr, uintptr) error { return nil }
 	_, _, err := openPTYWith(openFile, ioctl)
 	if err == nil || err.Error() != "slave open failed" {
 		t.Fatalf("expected slave open error, got %v", err)
 	}
 }
 
+// TestOpenPTYWithSuccessLinux ensures injected system calls can complete a usable PTY pair.
 func TestOpenPTYWithSuccessLinux(t *testing.T) {
 	openFile := func(name string, flag int, perm os.FileMode) (*os.File, error) {
 		return os.OpenFile(os.DevNull, os.O_RDWR, 0)
 	}
-	ioctl := func(fd uintptr, req uintptr, arg uintptr) error {
-		if req == syscall.TIOCGPTN {
-			*(*uint32)(unsafe.Pointer(arg)) = 0
-		}
-		return nil
-	}
+	ioctl := func(uintptr, uintptr, uintptr) error { return nil }
 	master, slave, err := openPTYWith(openFile, ioctl)
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)

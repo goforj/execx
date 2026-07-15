@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// main keeps this combined example executable so cross-feature API drift fails during compilation.
 func main() {
 	// Run executes the command and returns the result and any error.
 

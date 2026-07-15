@@ -10,11 +10,11 @@
     <a href="https://pkg.go.dev/github.com/goforj/execx"><img src="https://pkg.go.dev/badge/github.com/goforj/execx.svg" alt="Go Reference"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
     <a href="https://github.com/goforj/execx/actions"><img src="https://github.com/goforj/execx/actions/workflows/test.yml/badge.svg" alt="Go Test"></a>
-    <a href="https://golang.org"><img src="https://img.shields.io/badge/go-1.24+-blue?logo=go" alt="Go version"></a>
+    <a href="https://go.dev"><img src="https://img.shields.io/badge/go-1.24.4+-blue?logo=go" alt="Go version"></a>
     <img src="https://img.shields.io/github/v/tag/goforj/execx?label=version&sort=semver" alt="Latest tag"> 
     <a href="https://codecov.io/gh/goforj/execx" ><img src="https://codecov.io/github/goforj/execx/graph/badge.svg?token=RBB8T6WQ0U"/></a>
 <!-- test-count:embed:start -->
-    <img src="https://img.shields.io/badge/tests-101-brightgreen" alt="Tests">
+    <img src="https://img.shields.io/badge/tests-113-brightgreen" alt="Tests">
 <!-- test-count:embed:end -->
     <a href="https://goreportcard.com/report/github.com/goforj/execx"><img src="https://goreportcard.com/badge/github.com/goforj/execx" alt="Go Report Card"></a>
 </p>
@@ -25,7 +25,17 @@ execx is a small, explicit wrapper around `os/exec`. It keeps the `exec.Cmd` mod
 
 There is no shell interpolation. Arguments, environment, and I/O are set directly, and nothing runs until you call `Run`, `Output`, or `Start`.
 
+The core contract is deliberately narrow:
+
+- a non-zero child exit is data in `Result.ExitCode`, not a Go error;
+- start, context, and I/O failures are returned as errors and mirrored in `Result.Err`;
+- a `Cmd` is mutable and must not be configured or executed concurrently;
+- output callbacks and caller-provided writers are serialized within one pipeline;
+- strings shown by `String`, `ShellEscaped`, and `ShadowPrint` are for display only and are never executed by a shell.
+
 ## Installation
+
+execx requires Go 1.24.4 or newer.
 
 ```bash
 go get github.com/goforj/execx
@@ -80,8 +90,17 @@ fmt.Println(out)
 
 On Windows, use `cmd /c` or `powershell -Command` for shell built-ins.
 
-`PipeStrict` (default) stops at the first failing stage and returns that error.  
-`PipeBestEffort` runs all stages, returns the last stage output, and surfaces the first error if any stage failed.
+Every stage is started concurrently. `PipeStrict` (default) selects the first stage with an execution error or non-zero exit as the primary result. `PipeBestEffort` selects the last stage and surfaces the first execution error. Neither mode turns a non-zero exit into a Go error.
+
+Configuration is stage-local. Configure a stage before calling `Pipe`, then configure the returned stage separately:
+
+```go
+first := execx.Command("producer").Env("ROLE=producer")
+second := first.Pipe("consumer").Env("ROLE=consumer")
+res, err := second.Run()
+```
+
+`PipeStrict`, `PipeBestEffort`, `WithPTY`, and shadow-print settings are chain-wide.
 
 ## Context & cancellation
 
@@ -92,6 +111,8 @@ res, _ := execx.Command("go", "env", "GOOS").WithContext(ctx).Run()
 fmt.Println(res.ExitCode == 0)
 // #bool true
 ```
+
+Contexts are stage-local in pipelines. Replacing `WithTimeout` or `WithDeadline` keeps the context supplied through `WithContext` as the parent, including an already-canceled parent.
 
 ## Environment & I/O control
 
@@ -112,6 +133,8 @@ out, _ := execx.Command("cat").
 fmt.Println(out)
 // #string hi
 ```
+
+`StdinBytes` copies its input. `OnStdout` and `OnStderr` receive complete lines, including a final line without a trailing newline. A failure from `StdoutWriter` or `StderrWriter` is returned as `ErrExec`; bytes received before that failure remain available in `Result`.
 
 ## Advanced features
 
@@ -174,6 +197,7 @@ execx returns two error surfaces:
 1) `err` (from `Run`, `Output`, `CombinedOutput`, `Wait`, etc) only reports execution failures:
    - start failures (binary not found, not executable, OS start error)
    - context cancellations or timeouts (`WithContext`, `WithTimeout`, `WithDeadline`)
+   - output capture, callback writer, and caller-provided writer failures
    - pipeline failures based on `PipeStrict` / `PipeBestEffort`
 
 2) `Result.Err` mirrors `err` for convenience; it is not for exit status.
@@ -181,6 +205,23 @@ execx returns two error surfaces:
 Exit status is always reported via `Result.ExitCode`, even on non-zero exits. A non-zero exit does not automatically produce `err`.
 
 Use `err` when you want to handle execution failures, and check `Result.ExitCode` (or `Result.OK()` / `Result.IsExitCode`) when you care about command success.
+
+## Security and logging
+
+`Command(name, args...)` invokes the executable directly. It does not parse shell syntax, expand variables, glob paths, or interpret redirections. If you explicitly run a shell such as `sh -c` or `bash -c`, the command string becomes subject to that shell's rules and must be treated as untrusted input.
+
+`ShadowPrint` can expose arguments. Use `WithMask` for secrets. Custom formatters receive both masked `ShadowEvent.Command` and unmasked `ShadowEvent.RawCommand`; avoid logging the raw value.
+
+## Compatibility notes
+
+The v1 API and its non-zero-exit contract remain unchanged. This quality pass tightens four cases that were previously lossy or unsafe:
+
+- final unterminated output is now delivered to line callbacks;
+- caller-provided writer and PTY copy failures now return `ErrExec`;
+- `StdinBytes` no longer observes later mutations of the caller's slice;
+- replacement timeouts and deadlines no longer detach from their original parent context.
+
+Code that intentionally depended on one of those edge behaviors should update before adopting the next release. No exported signature changed.
 
 ## Non-goals and design principles
 
@@ -215,7 +256,6 @@ All public APIs are covered by runnable examples under `./examples`, and the tes
 | **Execution** | [CombinedOutput](#combinedoutput) · [OnExecCmd](#onexeccmd) · [Output](#output) · [OutputBytes](#outputbytes) · [OutputTrimmed](#outputtrimmed) · [Run](#run) · [Start](#start) |
 | **Input** | [StdinBytes](#stdinbytes) · [StdinFile](#stdinfile) · [StdinReader](#stdinreader) · [StdinString](#stdinstring) |
 | **OS Controls** | [CreationFlags](#creationflags) · [HideWindow](#hidewindow) · [Pdeathsig](#pdeathsig) · [Setpgid](#setpgid) · [Setsid](#setsid) |
-| **Other** | [Write](#write) |
 | **Pipelining** | [Pipe](#pipe) · [PipeBestEffort](#pipebesteffort) · [PipeStrict](#pipestrict) · [PipelineResults](#pipelineresults) |
 | **Process** | [GracefulShutdown](#gracefulshutdown) · [Interrupt](#interrupt) · [KillAfter](#killafter) · [Send](#send) · [Terminate](#terminate) · [Wait](#wait) |
 | **Results** | [IsExitCode](#isexitcode) · [IsSignal](#issignal) · [OK](#ok) |
@@ -254,7 +294,8 @@ fmt.Print(out)
 
 ### <a id="withcontext"></a>WithContext
 
-WithContext binds the command to a context.
+WithContext binds the command to a context. A nil context is normalized to
+context.Background when execution begins.
 
 ```go
 ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -266,7 +307,8 @@ fmt.Println(res.ExitCode == 0)
 
 ### <a id="withdeadline"></a>WithDeadline
 
-WithDeadline binds the command to a deadline.
+WithDeadline binds the command to a deadline. Replacing a deadline retains the
+context previously supplied through WithContext as its parent.
 
 ```go
 res, _ := execx.Command("go", "env", "GOOS").WithDeadline(time.Now().Add(2 * time.Second)).Run()
@@ -276,7 +318,8 @@ fmt.Println(res.ExitCode == 0)
 
 ### <a id="withtimeout"></a>WithTimeout
 
-WithTimeout binds the command to a timeout.
+WithTimeout binds the command to a timeout. Replacing a timeout retains the
+context previously supplied through WithContext as its parent.
 
 ```go
 res, _ := execx.Command("go", "env", "GOOS").WithTimeout(2 * time.Second).Run()
@@ -558,7 +601,9 @@ fmt.Println(err.Unwrap() != nil)
 
 ### <a id="combinedoutput"></a>CombinedOutput
 
-CombinedOutput executes the command and returns stdout+stderr and any error.
+CombinedOutput executes the command and returns stdout and stderr in observed
+chunk order plus any execution error. Exact byte interleaving between the two
+operating-system streams is inherently scheduler-dependent.
 
 ```go
 out, err := execx.Command("go", "env", "-badflag").CombinedOutput()
@@ -572,7 +617,9 @@ fmt.Println(err == nil)
 
 ### <a id="onexeccmd"></a>OnExecCmd
 
-OnExecCmd registers a callback to mutate the underlying exec.Cmd before start.
+OnExecCmd registers a callback to mutate the underlying exec.Cmd before execx
+attaches its stdin, output capture, and pipeline wiring. Use it for fields such
+as SysProcAttr; execx owns Stdin, Stdout, and Stderr during execution.
 
 ```go
 _, _ = execx.Command("printf", "hi").
@@ -614,7 +661,8 @@ fmt.Println(out)
 
 ### <a id="run"></a>Run
 
-Run executes the command and returns the result and any error.
+Run executes the command and returns the result and any execution error. A
+non-zero exit code is represented in Result and does not itself produce an error.
 
 ```go
 res, _ := execx.Command("go", "env", "GOOS").Run()
@@ -624,7 +672,8 @@ fmt.Println(res.ExitCode == 0)
 
 ### <a id="start"></a>Start
 
-Start executes the command asynchronously.
+Start executes the command asynchronously. Startup still completes synchronously,
+so a returned Process represents either a fully started pipeline or a completed error.
 
 ```go
 proc := execx.Command("go", "env", "GOOS").Start()
@@ -637,7 +686,8 @@ fmt.Println(res.ExitCode == 0)
 
 ### <a id="stdinbytes"></a>StdinBytes
 
-StdinBytes sets stdin from bytes.
+StdinBytes sets stdin from a copy of bytes so later caller mutation cannot
+change the command input.
 
 ```go
 out, _ := execx.Command("cat").
@@ -738,17 +788,13 @@ fmt.Print(out)
 // ok
 ```
 
-## Other
-
-### <a id="write"></a>Write
-
-Write buffers output and emits completed lines to the callback.
-
 ## Pipelining
 
 ### <a id="pipe"></a>Pipe
 
 Pipe appends a new command to the pipeline. Pipelines run on all platforms.
+Configuration called on the returned Cmd applies to the new stage; configure
+the current stage before Pipe when it needs different environment, context, or I/O.
 
 ```go
 out, _ := execx.Command("printf", "go").
@@ -760,7 +806,8 @@ fmt.Println(out)
 
 ### <a id="pipebesteffort"></a>PipeBestEffort
 
-PipeBestEffort sets best-effort pipeline semantics (run all stages, surface the first error).
+PipeBestEffort selects the last stage as the primary result while surfacing the
+first execution error. Every stage is started concurrently.
 
 ```go
 res, _ := execx.Command("false").
@@ -773,7 +820,8 @@ fmt.Print(res.Stdout)
 
 ### <a id="pipestrict"></a>PipeStrict
 
-PipeStrict sets strict pipeline semantics (stop on first failure).
+PipeStrict selects the first stage with an execution error or non-zero exit as
+the primary result. Every stage is still started concurrently.
 
 ```go
 res, _ := execx.Command("false").
@@ -786,7 +834,8 @@ fmt.Println(res.ExitCode != 0)
 
 ### <a id="pipelineresults"></a>PipelineResults
 
-PipelineResults executes the command and returns per-stage results and any error.
+PipelineResults executes the command and returns per-stage results and the first
+execution error. Non-zero exit codes remain data in their corresponding Result.
 
 ```go
 results, _ := execx.Command("printf", "go").
@@ -1008,7 +1057,9 @@ _, _ = execx.Command("printf", "hi").ShadowPrint(execx.WithPrefix("run")).Run()
 
 ### <a id="onstderr"></a>OnStderr
 
-OnStderr registers a line callback for stderr.
+OnStderr registers a line callback for stderr. The final unterminated line is
+delivered after the process exits. Output callbacks and writers are serialized
+across one pipeline.
 
 ```go
 _, err := execx.Command("go", "env", "-badflag").
@@ -1025,7 +1076,9 @@ fmt.Println(err == nil)
 
 ### <a id="onstdout"></a>OnStdout
 
-OnStdout registers a line callback for stdout.
+OnStdout registers a line callback for stdout. The final unterminated line is
+delivered after the process exits. Output callbacks and writers are serialized
+across one pipeline.
 
 ```go
 _, _ = execx.Command("printf", "hi\n").
@@ -1040,6 +1093,7 @@ StderrWriter sets a raw writer for stderr.
 
 When the writer is a terminal and no line callbacks or combined output are enabled,
 execx passes stderr through directly and does not buffer it for results.
+Writer failures are returned as ErrExec after already received bytes are captured.
 
 ```go
 var out strings.Builder
@@ -1060,6 +1114,7 @@ StdoutWriter sets a raw writer for stdout.
 
 When the writer is a terminal and no line callbacks or combined output are enabled,
 execx passes stdout through directly and does not buffer it for results.
+Writer failures are returned as ErrExec after already received bytes are captured.
 
 ```go
 var out strings.Builder

@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// main keeps this documented example executable so API drift fails during compilation.
 func main() {
 	// KillAfter terminates the process after the given duration.
 

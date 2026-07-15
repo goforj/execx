@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// main keeps this documented example executable so API drift fails during compilation.
 func main() {
 	// GracefulShutdown sends a signal and escalates to kill after the timeout.
 

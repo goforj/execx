@@ -5,8 +5,10 @@ import (
 	"github.com/goforj/execx"
 )
 
+// main keeps this documented example executable so API drift fails during compilation.
 func main() {
-	// PipeBestEffort sets best-effort pipeline semantics (run all stages, surface the first error).
+	// PipeBestEffort selects the last stage as the primary result while surfacing the
+	// first execution error. Every stage is started concurrently.
 
 	// Example: best effort
 	res, _ := execx.Command("false").

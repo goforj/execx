@@ -76,6 +76,7 @@ func run() error {
 // ------------------------------------------------------------
 //
 
+// FuncDoc captures the metadata needed to render one documented function.
 type FuncDoc struct {
 	Name        string
 	Group       string
@@ -85,6 +86,7 @@ type FuncDoc struct {
 	Examples    []Example
 }
 
+// Example captures an executable snippet and its source location.
 type Example struct {
 	Label string
 	Code  string
@@ -146,7 +148,7 @@ func parseFuncs(root string) ([]*FuncDoc, error) {
 				continue
 			}
 
-			if !ast.IsExported(fn.Name.Name) {
+			if !ast.IsExported(fn.Name.Name) || !hasExportedReceiver(fn) {
 				continue
 			}
 
@@ -176,6 +178,19 @@ func parseFuncs(root string) ([]*FuncDoc, error) {
 	}
 
 	return out, nil
+}
+
+// hasExportedReceiver excludes methods whose unexported receiver makes them package-internal.
+func hasExportedReceiver(fn *ast.FuncDecl) bool {
+	if fn.Recv == nil {
+		return true
+	}
+	typeExpr := fn.Recv.List[0].Type
+	if pointer, ok := typeExpr.(*ast.StarExpr); ok {
+		typeExpr = pointer.X
+	}
+	identifier, ok := typeExpr.(*ast.Ident)
+	return ok && ast.IsExported(identifier.Name)
 }
 
 // extractGroup keeps the generated index aligned with the source-level grouping annotation.

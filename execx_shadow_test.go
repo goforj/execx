@@ -13,6 +13,7 @@ import (
 
 var stderrMu sync.Mutex
 
+// captureStderr serializes global descriptor replacement so shadow tests cannot interfere.
 func captureStderr(t *testing.T, fn func()) string {
 	t.Helper()
 
@@ -38,11 +39,13 @@ func captureStderr(t *testing.T, fn func()) string {
 	return buf.String()
 }
 
+// stripANSI removes presentation codes before assertions inspect shadow text.
 func stripANSI(s string) string {
 	re := regexp.MustCompile(`\x1b\[[0-9;]*m`)
 	return re.ReplaceAllString(s, "")
 }
 
+// TestShadowPrintDefault ensures the default trace includes the command and elapsed duration.
 func TestShadowPrintDefault(t *testing.T) {
 	out := captureStderr(t, func() {
 		_, _ = Command("printf", "hi").ShadowPrint().Run()
@@ -56,6 +59,7 @@ func TestShadowPrintDefault(t *testing.T) {
 	}
 }
 
+// TestShadowPrintDefaultSpacing ensures command output remains visually separated from trace lines.
 func TestShadowPrintDefaultSpacing(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("spacing test uses sh")
@@ -91,6 +95,7 @@ func TestShadowPrintDefaultSpacing(t *testing.T) {
 	}
 }
 
+// TestShadowPrintPrefix ensures callers can identify traces with a custom prefix.
 func TestShadowPrintPrefix(t *testing.T) {
 	out := captureStderr(t, func() {
 		_, _ = Command("printf", "hi").ShadowPrint(WithPrefix("run")).Run()
@@ -101,6 +106,7 @@ func TestShadowPrintPrefix(t *testing.T) {
 	}
 }
 
+// TestShadowPrintOff ensures disabled tracing produces no diagnostic output.
 func TestShadowPrintOff(t *testing.T) {
 	out := captureStderr(t, func() {
 		_, _ = Command("printf", "hi").ShadowPrint().ShadowOff().Run()
@@ -110,6 +116,7 @@ func TestShadowPrintOff(t *testing.T) {
 	}
 }
 
+// TestShadowPrintMask ensures secrets can be redacted before commands reach diagnostic output.
 func TestShadowPrintMask(t *testing.T) {
 	out := captureStderr(t, func() {
 		mask := func(cmd string) string {
@@ -123,6 +130,7 @@ func TestShadowPrintMask(t *testing.T) {
 	}
 }
 
+// TestShadowPrintFormatter ensures custom formatting receives both lifecycle phases.
 func TestShadowPrintFormatter(t *testing.T) {
 	out := captureStderr(t, func() {
 		formatter := func(ev ShadowEvent) string {
@@ -144,6 +152,7 @@ func TestShadowPrintFormatter(t *testing.T) {
 	}
 }
 
+// TestShadowPrintFormatterEmpty ensures an empty formatted line suppresses that trace event.
 func TestShadowPrintFormatterEmpty(t *testing.T) {
 	out := captureStderr(t, func() {
 		formatter := func(ev ShadowEvent) string {
@@ -156,6 +165,7 @@ func TestShadowPrintFormatterEmpty(t *testing.T) {
 	}
 }
 
+// TestShadowCommandPipeline ensures traces describe the complete pipeline in execution order.
 func TestShadowCommandPipeline(t *testing.T) {
 	cmd := Command("printf", "go").Pipe("tr", "a-z", "A-Z")
 	if got := cmd.shadowCommand(); got != "printf go | tr a-z A-Z" {
@@ -163,6 +173,7 @@ func TestShadowCommandPipeline(t *testing.T) {
 	}
 }
 
+// TestShadowPrintAsync ensures Start traces are distinguishable from synchronous execution.
 func TestShadowPrintAsync(t *testing.T) {
 	out := captureStderr(t, func() {
 		proc := Command("sleep", "0.01").ShadowPrint().Start()
@@ -174,6 +185,7 @@ func TestShadowPrintAsync(t *testing.T) {
 	}
 }
 
+// TestShadowOffOnPreservesConfig ensures temporarily disabling tracing does not discard its options.
 func TestShadowOffOnPreservesConfig(t *testing.T) {
 	out := captureStderr(t, func() {
 		cmd := Command("printf", "hi").ShadowPrint(WithPrefix("run"))
@@ -186,6 +198,7 @@ func TestShadowOffOnPreservesConfig(t *testing.T) {
 	}
 }
 
+// TestShadowOnDefaultConfig ensures enabling an unconfigured command installs safe defaults.
 func TestShadowOnDefaultConfig(t *testing.T) {
 	out := captureStderr(t, func() {
 		cmd := Command("printf", "hi")
@@ -198,6 +211,7 @@ func TestShadowOnDefaultConfig(t *testing.T) {
 	}
 }
 
+// TestShadowPrintMaskWithFormatter ensures formatters receive redacted and raw forms for deliberate handling.
 func TestShadowPrintMaskWithFormatter(t *testing.T) {
 	out := captureStderr(t, func() {
 		mask := func(cmd string) string {
@@ -214,6 +228,7 @@ func TestShadowPrintMaskWithFormatter(t *testing.T) {
 	}
 }
 
+// TestShadowPrintEmptyPrefix ensures an empty custom prefix falls back to the recognizable default.
 func TestShadowPrintEmptyPrefix(t *testing.T) {
 	out := captureStderr(t, func() {
 		_, _ = Command("printf", "hi").ShadowPrint(WithPrefix("")).Run()
@@ -224,6 +239,7 @@ func TestShadowPrintEmptyPrefix(t *testing.T) {
 	}
 }
 
+// TestShadowPrintLineNil ensures absent shadow configuration remains a harmless no-op.
 func TestShadowPrintLineNil(t *testing.T) {
 	shadowPrintLine(nil, ShadowBefore, 0, false)
 }

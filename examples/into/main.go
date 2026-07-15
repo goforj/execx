@@ -5,6 +5,7 @@ import (
 	"github.com/goforj/execx"
 )
 
+// main keeps this documented example executable so API drift fails during compilation.
 func main() {
 	// Into executes the command and decodes into dst.
 

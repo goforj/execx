@@ -5,6 +5,7 @@ import (
 	"github.com/goforj/execx"
 )
 
+// main keeps this documented example executable so API drift fails during compilation.
 func main() {
 	// DecodeJSON configures JSON decoding for this command.
 	// Decoding reads from stdout by default; use FromStdout, FromStderr, or FromCombined to select a source.

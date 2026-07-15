@@ -2,11 +2,9 @@
 
 package execx
 
-import (
-	"syscall"
-	"testing"
-)
+import "testing"
 
+// TestHideWindowSetsCreateNoWindow ensures window suppression preserves caller-supplied creation flags.
 func TestHideWindowSetsCreateNoWindow(t *testing.T) {
 	cmd := Command("go", "env", "GOOS")
 	cmd.CreationFlags(0x10).HideWindow(true)
@@ -16,7 +14,7 @@ func TestHideWindowSetsCreateNoWindow(t *testing.T) {
 	if !cmd.sysProcAttr.HideWindow {
 		t.Fatalf("expected HideWindow set")
 	}
-	if cmd.sysProcAttr.CreationFlags&syscall.CREATE_NO_WINDOW == 0 {
+	if cmd.sysProcAttr.CreationFlags&CreateNoWindow == 0 {
 		t.Fatalf("expected CREATE_NO_WINDOW flag")
 	}
 	if cmd.sysProcAttr.CreationFlags&0x10 == 0 {

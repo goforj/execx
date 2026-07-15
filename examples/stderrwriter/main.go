@@ -6,11 +6,13 @@ import (
 	"strings"
 )
 
+// main keeps this documented example executable so API drift fails during compilation.
 func main() {
 	// StderrWriter sets a raw writer for stderr.
 	//
 	// When the writer is a terminal and no line callbacks or combined output are enabled,
 	// execx passes stderr through directly and does not buffer it for results.
+	// Writer failures are returned as ErrExec after already received bytes are captured.
 
 	// Example: stderr writer
 	var out strings.Builder

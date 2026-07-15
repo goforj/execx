@@ -12,6 +12,7 @@ type testPayload struct {
 	Name string `json:"name"`
 }
 
+// TestDecodeYAMLInto ensures YAML command output can populate a caller-owned destination.
 func TestDecodeYAMLInto(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("decode yaml test uses printf")
@@ -30,6 +31,7 @@ func TestDecodeYAMLInto(t *testing.T) {
 	}
 }
 
+// TestDecodeFromStdout ensures the explicit stdout source feeds the selected decoder.
 func TestDecodeFromStdout(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("decode stdout test uses printf")
@@ -46,6 +48,7 @@ func TestDecodeFromStdout(t *testing.T) {
 	}
 }
 
+// TestDecodeNilCmd ensures fluent decoding rejects a nil command instead of panicking.
 func TestDecodeNilCmd(t *testing.T) {
 	var out testPayload
 	err := (*Cmd)(nil).
@@ -56,6 +59,7 @@ func TestDecodeNilCmd(t *testing.T) {
 	}
 }
 
+// TestDecodeWithJSON ensures custom decoder functions use the same execution path as built-in decoders.
 func TestDecodeWithJSON(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("output into test uses printf")
@@ -71,6 +75,7 @@ func TestDecodeWithJSON(t *testing.T) {
 	}
 }
 
+// TestDecodeTrim ensures callers can discard surrounding whitespace before strict decoding.
 func TestDecodeTrim(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("decode trim test uses printf")
@@ -88,6 +93,7 @@ func TestDecodeTrim(t *testing.T) {
 	}
 }
 
+// TestDecodeCombined ensures combined output can be selected as the decoder input.
 func TestDecodeCombined(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("combined output test uses sh")
@@ -105,6 +111,7 @@ func TestDecodeCombined(t *testing.T) {
 	}
 }
 
+// TestDecodeCombinedStartError ensures process startup failures survive the combined-output wrapper.
 func TestDecodeCombinedStartError(t *testing.T) {
 	var out testPayload
 	err := Command("execx-does-not-exist").
@@ -116,6 +123,7 @@ func TestDecodeCombinedStartError(t *testing.T) {
 	}
 }
 
+// TestDecodeCombinedDecodeError ensures malformed combined output identifies its source in the error.
 func TestDecodeCombinedDecodeError(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("combined output test uses sh")
@@ -130,6 +138,7 @@ func TestDecodeCombinedDecodeError(t *testing.T) {
 	}
 }
 
+// TestDecodeStderr ensures structured data written only to stderr remains decodable.
 func TestDecodeStderr(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("stderr output test uses sh")
@@ -147,6 +156,7 @@ func TestDecodeStderr(t *testing.T) {
 	}
 }
 
+// TestDecodeStderrStartError ensures process startup failures survive the stderr wrapper.
 func TestDecodeStderrStartError(t *testing.T) {
 	var out testPayload
 	err := Command("execx-does-not-exist").
@@ -158,6 +168,7 @@ func TestDecodeStderrStartError(t *testing.T) {
 	}
 }
 
+// TestDecodeStderrDecodeError ensures malformed stderr output identifies its source in the error.
 func TestDecodeStderrDecodeError(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("stderr output test uses sh")
@@ -172,6 +183,7 @@ func TestDecodeStderrDecodeError(t *testing.T) {
 	}
 }
 
+// TestDecodeWithErrors ensures invalid destinations and missing decoders fail before execution.
 func TestDecodeWithErrors(t *testing.T) {
 	err := Command("printf", `{"name":"gopher"}`).
 		DecodeWith(nil, DecoderFunc(json.Unmarshal))
@@ -193,6 +205,7 @@ func TestDecodeWithErrors(t *testing.T) {
 	}
 }
 
+// TestDecodeErrorWrap ensures decoder failures retain useful underlying error detail.
 func TestDecodeErrorWrap(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("decode error test uses printf")

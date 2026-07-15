@@ -6,6 +6,7 @@ import (
 	"syscall"
 )
 
+// main keeps this documented example executable so API drift fails during compilation.
 func main() {
 	// Pdeathsig is a no-op on non-Linux platforms; on Linux it signals the child when the parent exits.
 
