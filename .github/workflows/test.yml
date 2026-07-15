@@ -47,6 +47,8 @@ jobs:
         run: |
           GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go test -c -o /tmp/execx-windows.test .
           GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go test -c -o /tmp/execx-darwin.test .
+          GOOS=plan9 GOARCH=amd64 CGO_ENABLED=0 go test -c -o /tmp/execx-plan9.test .
+          GOOS=js GOARCH=wasm CGO_ENABLED=0 go test -c -o /tmp/execx-js.test .
 
       - name: Run race detector
         run: go test -race ./...
