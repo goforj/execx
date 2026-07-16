@@ -105,12 +105,8 @@ func (p *pipeline) start() {
 		if stg.ptyMaster != nil {
 			stg.ptyDone = make(chan error, 1)
 			go func(st *stage) {
-				_, err := io.Copy(st.ptyWriter, st.ptyMaster)
-				if err != nil {
-					st.ptyDone <- err
-				} else {
-					st.ptyDone <- nil
-				}
+				_, err := io.Copy(st.ptyWriter, ptyOutputReader(st.ptyMaster))
+				st.ptyDone <- err
 				_ = st.ptyMaster.Close()
 			}(stg)
 			_ = stg.ptySlave.Close()
