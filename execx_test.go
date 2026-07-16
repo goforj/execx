@@ -17,6 +17,7 @@ import (
 	"time"
 )
 
+// TestHelperProcess provides deterministic subprocess behavior for stream, signal, and exit tests.
 func TestHelperProcess(t *testing.T) {
 	if os.Getenv("EXECX_TEST_HELPER") != "1" {
 		return
@@ -59,10 +60,7 @@ func TestHelperProcess(t *testing.T) {
 		wd, _ := os.Getwd()
 		_, _ = io.WriteString(os.Stdout, wd)
 	case "signal":
-		if runtime.GOOS == "windows" {
-			os.Exit(3)
-		}
-		_ = syscall.Kill(os.Getpid(), syscall.SIGTERM)
+		terminateHelperProcess()
 		time.Sleep(50 * time.Millisecond)
 	case "ignore-term":
 		if runtime.GOOS == "windows" {
@@ -76,6 +74,7 @@ func TestHelperProcess(t *testing.T) {
 	os.Exit(0)
 }
 
+// helperCommand routes deterministic subprocess behavior through the current test binary.
 func helperCommand(args ...string) *Cmd {
 	full := append([]string{"-test.run=TestHelperProcess", "--"}, args...)
 	cmd := Command(os.Args[0], full...)
@@ -83,6 +82,7 @@ func helperCommand(args ...string) *Cmd {
 	return cmd
 }
 
+// helperPipe appends a deterministic helper subprocess as one pipeline stage.
 func helperPipe(cmd *Cmd, args ...string) *Cmd {
 	full := append([]string{"-test.run=TestHelperProcess", "--"}, args...)
 	stage := cmd.Pipe(os.Args[0], full...)
@@ -92,10 +92,12 @@ func helperPipe(cmd *Cmd, args ...string) *Cmd {
 
 type envStringer struct{}
 
+// String provides an environment entry through Env's fmt.Stringer fallback.
 func (envStringer) String() string {
 	return "EXECX_ENV_VALUE=stringer"
 }
 
+// TestArgOrderAndArgs ensures heterogeneous arguments retain deterministic command-line order.
 func TestArgOrderAndArgs(t *testing.T) {
 	cmd := helperCommand("echo").Arg("alpha").Arg(map[string]string{"--b": "2", "--a": "1"})
 	out, err := cmd.Output()
@@ -111,6 +113,7 @@ func TestArgOrderAndArgs(t *testing.T) {
 	}
 }
 
+// TestArgVariants ensures slices and scalar values share the fluent argument path.
 func TestArgVariants(t *testing.T) {
 	out, err := helperCommand("echo").Arg([]string{"a", "b"}, 123).Output()
 	if err != nil {
@@ -121,6 +124,7 @@ func TestArgVariants(t *testing.T) {
 	}
 }
 
+// TestEnvModes ensures inheritance, replacement, and appended overrides remain distinct policies.
 func TestEnvModes(t *testing.T) {
 	key := "EXECX_ENV_VALUE"
 	t.Setenv(key, "base")
@@ -146,6 +150,7 @@ func TestEnvModes(t *testing.T) {
 	}
 }
 
+// TestEnvVariants ensures supported environment input forms resolve with deterministic precedence.
 func TestEnvVariants(t *testing.T) {
 	cmd := Command(os.Args[0], "-test.run=TestHelperProcess", "--", "env", "EXECX_ENV_VALUE").
 		Env(envStringer{}).
@@ -160,6 +165,7 @@ func TestEnvVariants(t *testing.T) {
 	}
 }
 
+// TestEnvAppendEmpty ensures append mode starts from the process environment when no explicit map exists.
 func TestEnvAppendEmpty(t *testing.T) {
 	cmd := Command(os.Args[0], "-test.run=TestHelperProcess", "--", "env", "EXECX_ENV_VALUE").
 		EnvAppend(map[string]string{"EXECX_ENV_VALUE": "append", "EXECX_TEST_HELPER": "1"})
@@ -172,6 +178,7 @@ func TestEnvAppendEmpty(t *testing.T) {
 	}
 }
 
+// TestEnvList ensures environment inspection is sorted and therefore reproducible.
 func TestEnvList(t *testing.T) {
 	cmd := helperCommand("env", "NONE").EnvOnly(map[string]string{"B": "2", "A": "1", "EXECX_TEST_HELPER": "1"})
 	list := cmd.EnvList()
@@ -180,6 +187,7 @@ func TestEnvList(t *testing.T) {
 	}
 }
 
+// TestStdinHelpers ensures every supported input source reaches the child process unchanged.
 func TestStdinHelpers(t *testing.T) {
 	cases := []struct {
 		name string
@@ -234,6 +242,22 @@ func TestStdinHelpers(t *testing.T) {
 	}
 }
 
+// TestStdinBytesCopiesInput ensures later caller mutation cannot alter a configured command.
+func TestStdinBytesCopiesInput(t *testing.T) {
+	input := []byte("before")
+	cmd := helperCommand("cat").StdinBytes(input)
+	copy(input, "mutate")
+
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if out != "before" {
+		t.Fatalf("expected configured bytes to be stable, got %q", out)
+	}
+}
+
+// TestOutputVariants ensures string, byte, trimmed, and combined capture preserve their distinct contracts.
 func TestOutputVariants(t *testing.T) {
 	out, err := helperCommand("echo", "  spaced  ").OutputTrimmed()
 	if err != nil {
@@ -260,6 +284,7 @@ func TestOutputVariants(t *testing.T) {
 	}
 }
 
+// TestExitHelpers ensures ordinary nonzero exits remain results rather than execution failures.
 func TestExitHelpers(t *testing.T) {
 	res, err := helperCommand("exit", "2").Run()
 	if err != nil {
@@ -276,6 +301,7 @@ func TestExitHelpers(t *testing.T) {
 	}
 }
 
+// TestIsSignal ensures signal termination remains distinguishable from numeric exit status.
 func TestIsSignal(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("signals not supported on windows")
@@ -289,6 +315,7 @@ func TestIsSignal(t *testing.T) {
 	}
 }
 
+// TestWithTimeout ensures the shortest configured timeout bounds process execution.
 func TestWithTimeout(t *testing.T) {
 	_, err := helperCommand("sleep", "200").WithTimeout(50 * time.Millisecond).Run()
 	if err == nil {
@@ -304,18 +331,35 @@ func TestWithTimeout(t *testing.T) {
 	}
 }
 
+// TestWithDeadline ensures expired deadlines stop work while later replacements permit valid commands.
 func TestWithDeadline(t *testing.T) {
 	_, err := helperCommand("sleep", "100").WithDeadline(time.Now().Add(10 * time.Millisecond)).Run()
 	if err == nil {
 		t.Fatalf("expected deadline error")
 	}
 
-	_, err = helperCommand("echo", "ok").WithDeadline(time.Now().Add(200 * time.Millisecond)).WithDeadline(time.Now().Add(300 * time.Millisecond)).Run()
+	_, err = helperCommand("echo", "ok").WithDeadline(time.Now().Add(2 * time.Second)).WithDeadline(time.Now().Add(3 * time.Second)).Run()
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 }
 
+// TestTimeoutPreservesCanceledParent ensures derived timing options cannot hide parent cancellation.
+func TestTimeoutPreservesCanceledParent(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cmd := helperCommand("sleep", "200").
+		WithContext(ctx).
+		WithTimeout(time.Second).
+		WithDeadline(time.Now().Add(2 * time.Second))
+	cancel()
+
+	_, err := cmd.Run()
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected canceled parent to remain authoritative, got %v", err)
+	}
+}
+
+// TestWithContext ensures replacing command context consistently controls subsequent execution.
 func TestWithContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -330,6 +374,7 @@ func TestWithContext(t *testing.T) {
 	}
 }
 
+// TestDir ensures the child process observes the configured working directory.
 func TestDir(t *testing.T) {
 	temp := t.TempDir()
 	out, err := helperCommand("pwd").Dir(temp).Output()
@@ -349,6 +394,7 @@ func TestDir(t *testing.T) {
 	}
 }
 
+// TestPipeModes ensures strict pipelines report any stage failure while best-effort mode follows the last stage.
 func TestPipeModes(t *testing.T) {
 	strictRes, err := helperPipe(helperCommand("exit", "2"), "echo", "ok").Run()
 	if err != nil {
@@ -370,6 +416,7 @@ func TestPipeModes(t *testing.T) {
 	}
 }
 
+// TestPipeChain ensures appended stages preserve pipeline order and final output ownership.
 func TestPipeChain(t *testing.T) {
 	root := helperCommand("echo", "a")
 	stage := helperPipe(root, "echo", "b")
@@ -383,6 +430,7 @@ func TestPipeChain(t *testing.T) {
 	}
 }
 
+// TestPipeBestEffortSetsError ensures context failure remains visible even when the final stage succeeds.
 func TestPipeBestEffortSetsError(t *testing.T) {
 	res, err := helperPipe(helperCommand("sleep", "50").WithTimeout(10*time.Millisecond).PipeBestEffort(), "echo", "ok").Run()
 	if err == nil || !errorsIsContext(err) {
@@ -393,6 +441,7 @@ func TestPipeBestEffortSetsError(t *testing.T) {
 	}
 }
 
+// TestPipeStartError ensures an unstartable stage produces an execution error and sentinel exit code.
 func TestPipeStartError(t *testing.T) {
 	bad := Command("execx-does-not-exist")
 	stage := helperPipe(bad, "echo", "ok")
@@ -409,6 +458,37 @@ func TestPipeStartError(t *testing.T) {
 	}
 }
 
+// TestPipelineDownstreamStartErrorAbortsUpstream ensures partial startup cannot leave an earlier process running.
+func TestPipelineDownstreamStartErrorAbortsUpstream(t *testing.T) {
+	cmd := helperCommand("sleep", "5000").Pipe("execx-does-not-exist")
+	type outcome struct {
+		result Result
+		err    error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		result, err := cmd.Run()
+		done <- outcome{result: result, err: err}
+	}()
+
+	select {
+	case got := <-done:
+		if got.err == nil {
+			t.Fatal("expected downstream start error")
+		}
+		var execErr ErrExec
+		if !errors.As(got.err, &execErr) {
+			t.Fatalf("expected ErrExec, got %T", got.err)
+		}
+		if got.result.ExitCode != -1 {
+			t.Fatalf("expected failed stage result, got exit code %d", got.result.ExitCode)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("pipeline did not abort after downstream start failure")
+	}
+}
+
+// TestStringAndShellEscaped ensures display quoting and shell-safe quoting remain intentionally different.
 func TestStringAndShellEscaped(t *testing.T) {
 	cmd := Command("echo", "hello world", "it's")
 	if cmd.String() != "echo \"hello world\" it's" {
@@ -428,6 +508,7 @@ func TestStringAndShellEscaped(t *testing.T) {
 	}
 }
 
+// TestLineCallbacks ensures stdout and stderr lines reach only their respective callbacks.
 func TestLineCallbacks(t *testing.T) {
 	var stdoutLines []string
 	var stderrLines []string
@@ -447,6 +528,43 @@ func TestLineCallbacks(t *testing.T) {
 	}
 }
 
+// TestLineCallbacksFlushFinalLine ensures unterminated trailing output is not lost at process exit.
+func TestLineCallbacksFlushFinalLine(t *testing.T) {
+	var stdoutLines []string
+	var stderrLines []string
+	_, err := helperCommand("echo", "tail").
+		OnStdout(func(line string) { stdoutLines = append(stdoutLines, line) }).
+		Run()
+	if err != nil {
+		t.Fatalf("expected no stdout error, got %v", err)
+	}
+	_, err = helperCommand("stderr", "tail").
+		OnStderr(func(line string) { stderrLines = append(stderrLines, line) }).
+		Run()
+	if err != nil {
+		t.Fatalf("expected no stderr error, got %v", err)
+	}
+	if strings.Join(stdoutLines, ",") != "tail" || strings.Join(stderrLines, ",") != "tail" {
+		t.Fatalf("expected final lines, got stdout=%v stderr=%v", stdoutLines, stderrLines)
+	}
+}
+
+// TestOutputCallbacksAreSerialized ensures shared callback state is safe across concurrent stdout and stderr reads.
+func TestOutputCallbacksAreSerialized(t *testing.T) {
+	var lines []string
+	callback := func(line string) {
+		lines = append(lines, line)
+	}
+	_, err := helperCommand("lines").OnStdout(callback).OnStderr(callback).Run()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(lines) != 3 {
+		t.Fatalf("expected every output line, got %v", lines)
+	}
+}
+
+// TestWritersBeforeLineCallbacks ensures byte writers observe output before derived line notifications.
 func TestWritersBeforeLineCallbacks(t *testing.T) {
 	var order []string
 	var stdoutLines []string
@@ -468,6 +586,7 @@ func TestWritersBeforeLineCallbacks(t *testing.T) {
 	}
 }
 
+// TestStderrWriter ensures raw stderr forwarding and line callbacks can coexist without data loss.
 func TestStderrWriter(t *testing.T) {
 	var stderrLines []string
 	writer := &orderedWriter{tag: "stderr"}
@@ -485,6 +604,7 @@ func TestStderrWriter(t *testing.T) {
 	}
 }
 
+// TestStartAndWait ensures asynchronous execution reports the same clean result as Run.
 func TestStartAndWait(t *testing.T) {
 	proc := helperCommand("sleep", "50").Start()
 	res, err := proc.Wait()
@@ -493,6 +613,7 @@ func TestStartAndWait(t *testing.T) {
 	}
 }
 
+// TestStartError ensures startup failures retain ErrExec identity and an unavailable exit code.
 func TestStartError(t *testing.T) {
 	res, err := Command("execx-does-not-exist").Run()
 	if err == nil {
@@ -507,6 +628,7 @@ func TestStartError(t *testing.T) {
 	}
 }
 
+// TestLineWriterNil ensures a line splitter without a callback still satisfies io.Writer safely.
 func TestLineWriterNil(t *testing.T) {
 	writer := &lineWriter{}
 	n, err := writer.Write([]byte("data"))
@@ -515,6 +637,7 @@ func TestLineWriterNil(t *testing.T) {
 	}
 }
 
+// TestWithPTYPipelineUnsupported ensures PTY mode rejects pipelines whose stream topology cannot be represented safely.
 func TestWithPTYPipelineUnsupported(t *testing.T) {
 	prevCheck := ptyCheckFunc
 	ptyCheckFunc = func() error { return nil }
@@ -530,6 +653,7 @@ func TestWithPTYPipelineUnsupported(t *testing.T) {
 	}
 }
 
+// TestWithPTYOpenError ensures terminal allocation failures abort execution with their cause intact.
 func TestWithPTYOpenError(t *testing.T) {
 	prevOpen := openPTYFunc
 	prevCheck := ptyCheckFunc
@@ -547,6 +671,7 @@ func TestWithPTYOpenError(t *testing.T) {
 	}
 }
 
+// TestWithPTYCombinedStream ensures PTY output is captured once while notifying both logical stream callbacks.
 func TestWithPTYCombinedStream(t *testing.T) {
 	prevOpen := openPTYFunc
 	prevCheck := ptyCheckFunc
@@ -586,6 +711,7 @@ func TestWithPTYCombinedStream(t *testing.T) {
 	}
 }
 
+// TestWithPTYCombinedOutput ensures the combined-output convenience API works with a single PTY stream.
 func TestWithPTYCombinedOutput(t *testing.T) {
 	prevOpen := openPTYFunc
 	prevCheck := ptyCheckFunc
@@ -610,6 +736,7 @@ func TestWithPTYCombinedOutput(t *testing.T) {
 	}
 }
 
+// TestWithPTYPipelineResults ensures a one-stage PTY command retains the pipeline-results API contract.
 func TestWithPTYPipelineResults(t *testing.T) {
 	prevOpen := openPTYFunc
 	prevCheck := ptyCheckFunc
@@ -634,6 +761,7 @@ func TestWithPTYPipelineResults(t *testing.T) {
 	}
 }
 
+// TestWithPTYStart ensures asynchronous PTY capture is complete before Wait returns.
 func TestWithPTYStart(t *testing.T) {
 	prevOpen := openPTYFunc
 	prevCheck := ptyCheckFunc
@@ -656,6 +784,7 @@ func TestWithPTYStart(t *testing.T) {
 	}
 }
 
+// TestWithPTYCheckError ensures unsupported terminals fail before process startup.
 func TestWithPTYCheckError(t *testing.T) {
 	prevCheck := ptyCheckFunc
 	ptyCheckFunc = func() error { return errors.New("pty unsupported") }
@@ -668,6 +797,7 @@ func TestWithPTYCheckError(t *testing.T) {
 	}
 }
 
+// TestWithPTYStartCheckError ensures asynchronous PTY validation failures surface through Wait.
 func TestWithPTYStartCheckError(t *testing.T) {
 	prevCheck := ptyCheckFunc
 	ptyCheckFunc = func() error { return errors.New("pty unsupported") }
@@ -684,6 +814,7 @@ func TestWithPTYStartCheckError(t *testing.T) {
 	}
 }
 
+// TestWithPTYPipelineResultsCheckError ensures PTY validation also protects the pipeline-results entry point.
 func TestWithPTYPipelineResultsCheckError(t *testing.T) {
 	prevCheck := ptyCheckFunc
 	ptyCheckFunc = func() error { return errors.New("pty unsupported") }
@@ -700,11 +831,27 @@ type errWriter struct {
 	called bool
 }
 
+// Write records the attempt before returning a deterministic output failure.
 func (w *errWriter) Write(p []byte) (int, error) {
 	w.called = true
 	return 0, errors.New("write failed")
 }
 
+type errReader struct{}
+
+// Read returns a deterministic stdin-copy failure.
+func (errReader) Read([]byte) (int, error) {
+	return 0, errors.New("read failed")
+}
+
+type sliceWriter []byte
+
+// Write accepts bytes without mutating its non-comparable value receiver.
+func (sliceWriter) Write(p []byte) (int, error) {
+	return len(p), nil
+}
+
+// TestWithPTYWriterError ensures forwarding failures become ErrExec without discarding captured output.
 func TestWithPTYWriterError(t *testing.T) {
 	prevOpen := openPTYFunc
 	prevCheck := ptyCheckFunc
@@ -722,17 +869,50 @@ func TestWithPTYWriterError(t *testing.T) {
 	})
 	writer := &errWriter{}
 	res, err := Command("printf", "hi").WithPTY().StdoutWriter(writer).Run()
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
+	if err == nil {
+		t.Fatal("expected writer error")
+	}
+	var execErr ErrExec
+	if !errors.As(err, &execErr) {
+		t.Fatalf("expected ErrExec, got %T", err)
 	}
 	if !writer.called {
 		t.Fatalf("expected writer to be called")
 	}
-	if res.Stdout != "" {
-		t.Fatalf("expected empty stdout, got %q", res.Stdout)
+	if res.Stdout != "hi" {
+		t.Fatalf("expected captured stdout before writer failure, got %q", res.Stdout)
 	}
 }
 
+// TestWriterErrorIsExecutionError ensures ordinary stream-writer failures use the same ErrExec boundary as process failures.
+func TestWriterErrorIsExecutionError(t *testing.T) {
+	writer := &errWriter{}
+	res, err := helperCommand("echo", "hi").StdoutWriter(writer).Run()
+	if err == nil {
+		t.Fatal("expected writer error")
+	}
+	var execErr ErrExec
+	if !errors.As(err, &execErr) {
+		t.Fatalf("expected ErrExec, got %T", err)
+	}
+	if res.Stdout != "hi" {
+		t.Fatalf("expected result capture before writer failure, got %q", res.Stdout)
+	}
+}
+
+// TestReaderErrorIsExecutionError ensures stdin-copy failures cannot be mistaken for successful execution.
+func TestReaderErrorIsExecutionError(t *testing.T) {
+	_, err := helperCommand("cat").StdinReader(errReader{}).Run()
+	if err == nil {
+		t.Fatal("expected reader error")
+	}
+	var execErr ErrExec
+	if !errors.As(err, &execErr) {
+		t.Fatalf("expected ErrExec, got %T", err)
+	}
+}
+
+// TestWithPTYStartError ensures process startup failures remain visible after successful terminal allocation.
 func TestWithPTYStartError(t *testing.T) {
 	prevOpen := openPTYFunc
 	prevCheck := ptyCheckFunc
@@ -754,6 +934,7 @@ func TestWithPTYStartError(t *testing.T) {
 	}
 }
 
+// TestWithPTYWritersNoCallbacks ensures both configured writers receive the merged PTY stream without callbacks.
 func TestWithPTYWritersNoCallbacks(t *testing.T) {
 	prevOpen := openPTYFunc
 	prevCheck := ptyCheckFunc
@@ -787,6 +968,45 @@ func TestWithPTYWritersNoCallbacks(t *testing.T) {
 	}
 }
 
+// TestWithPTYSharedWriterAndCallback ensures a shared writer receives merged bytes once while callbacks remain serialized.
+func TestWithPTYSharedWriterAndCallback(t *testing.T) {
+	prevOpen := openPTYFunc
+	prevCheck := ptyCheckFunc
+	openPTYFunc = func() (*os.File, *os.File, error) {
+		r, w, err := os.Pipe()
+		if err != nil {
+			return nil, nil, err
+		}
+		return r, w, nil
+	}
+	ptyCheckFunc = func() error { return nil }
+	t.Cleanup(func() {
+		openPTYFunc = prevOpen
+		ptyCheckFunc = prevCheck
+	})
+
+	var output bytes.Buffer
+	var lines []string
+	callback := func(line string) { lines = append(lines, line) }
+	_, err := Command("printf", "a\nb").
+		WithPTY().
+		StdoutWriter(&output).
+		StderrWriter(&output).
+		OnStdout(callback).
+		OnStderr(callback).
+		Run()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if output.String() != "a\nb" {
+		t.Fatalf("expected shared writer to receive one merged stream, got %q", output.String())
+	}
+	if strings.Join(lines, ",") != "a,a,b,b" {
+		t.Fatalf("expected serialized PTY callbacks, got %v", lines)
+	}
+}
+
+// TestPTYLineWriterNil ensures an unconfigured PTY splitter remains a safe io.Writer.
 func TestPTYLineWriterNil(t *testing.T) {
 	writer := &ptyLineWriter{}
 	n, err := writer.Write([]byte("data"))
@@ -795,6 +1015,41 @@ func TestPTYLineWriterNil(t *testing.T) {
 	}
 }
 
+// TestPTYLineWriterFlush ensures a trailing carriage-return line is emitted exactly once.
+func TestPTYLineWriterFlush(t *testing.T) {
+	var stdoutLines []string
+	var stderrLines []string
+	writer := &ptyLineWriter{
+		onStdout: func(line string) { stdoutLines = append(stdoutLines, line) },
+		onStderr: func(line string) { stderrLines = append(stderrLines, line) },
+	}
+	_, _ = writer.Write([]byte("tail\r"))
+	writer.Flush()
+	writer.Flush()
+	if strings.Join(stdoutLines, ",") != "tail" || strings.Join(stderrLines, ",") != "tail" {
+		t.Fatalf("expected flushed PTY lines, got stdout=%v stderr=%v", stdoutLines, stderrLines)
+	}
+}
+
+// TestSameWriter ensures writer deduplication avoids panics for non-comparable implementations.
+func TestSameWriter(t *testing.T) {
+	var first bytes.Buffer
+	var second bytes.Buffer
+	if !sameWriter(nil, nil) {
+		t.Fatal("expected two nil writers to match")
+	}
+	if sameWriter(nil, &first) || sameWriter(&first, &second) {
+		t.Fatal("expected distinct writers not to match")
+	}
+	if !sameWriter(&first, &first) {
+		t.Fatal("expected identical writer pointers to match")
+	}
+	if sameWriter(sliceWriter{}, sliceWriter{}) {
+		t.Fatal("expected non-comparable writer values not to be compared")
+	}
+}
+
+// TestOnExecCmdApplied ensures the final os/exec command remains customizable before startup.
 func TestOnExecCmdApplied(t *testing.T) {
 	called := false
 	cmd := Command("printf", "hi").OnExecCmd(func(ec *exec.Cmd) {
@@ -817,6 +1072,7 @@ func TestOnExecCmdApplied(t *testing.T) {
 	}
 }
 
+// TestIsTerminalWriterNonFile ensures terminal probing never assumes arbitrary writers are files.
 func TestIsTerminalWriterNonFile(t *testing.T) {
 	var buf bytes.Buffer
 	if isTerminalWriter(&buf) {
@@ -824,6 +1080,7 @@ func TestIsTerminalWriterNonFile(t *testing.T) {
 	}
 }
 
+// TestStdoutWriterTTYPassthrough ensures interactive stdout is not hidden behind capture buffering.
 func TestStdoutWriterTTYPassthrough(t *testing.T) {
 	prev := isTerminalFunc
 	isTerminalFunc = func(int) bool { return true }
@@ -837,6 +1094,7 @@ func TestStdoutWriterTTYPassthrough(t *testing.T) {
 	}
 }
 
+// TestStderrWriterTTYPassthrough ensures interactive stderr is not hidden behind capture buffering.
 func TestStderrWriterTTYPassthrough(t *testing.T) {
 	prev := isTerminalFunc
 	isTerminalFunc = func(int) bool { return true }
@@ -850,12 +1108,14 @@ func TestStderrWriterTTYPassthrough(t *testing.T) {
 	}
 }
 
+// TestSignalFromStateNil ensures absent process state cannot fabricate a termination signal.
 func TestSignalFromStateNil(t *testing.T) {
 	if signalFromState(nil) != nil {
 		t.Fatalf("expected nil signal")
 	}
 }
 
+// TestRootCmd ensures an unpiped command is its own pipeline root.
 func TestRootCmd(t *testing.T) {
 	cmd := &Cmd{}
 	if cmd.rootCmd() != cmd {
@@ -863,6 +1123,7 @@ func TestRootCmd(t *testing.T) {
 	}
 }
 
+// TestStageResultContextError ensures cancellation takes precedence when no process state exists.
 func TestStageResultContextError(t *testing.T) {
 	st := &stage{
 		waitErr: context.Canceled,
@@ -878,6 +1139,7 @@ func TestStageResultContextError(t *testing.T) {
 	}
 }
 
+// TestPipelineResults ensures callers receive one ordered result per pipeline stage.
 func TestPipelineResults(t *testing.T) {
 	root := helperCommand("echo", "a")
 	stage := helperPipe(root, "echo", "b")
@@ -894,6 +1156,7 @@ func TestPipelineResults(t *testing.T) {
 	}
 }
 
+// TestPipelineResultsError ensures a failed single stage still has an inspectable result.
 func TestPipelineResultsError(t *testing.T) {
 	results, err := Command("execx-does-not-exist").PipelineResults()
 	if err == nil {
@@ -911,6 +1174,7 @@ func TestPipelineResultsError(t *testing.T) {
 	}
 }
 
+// TestPipelineStartErrorPropagation ensures startup failure is recorded on the stage that could not run.
 func TestPipelineStartErrorPropagation(t *testing.T) {
 	results, err := Command("execx-does-not-exist").
 		Pipe("printf", "ok").
@@ -926,6 +1190,7 @@ func TestPipelineStartErrorPropagation(t *testing.T) {
 	}
 }
 
+// TestProcessSignals ensures callers can deliver an explicit operating-system signal to a running process.
 func TestProcessSignals(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("signals not supported on windows")
@@ -943,6 +1208,7 @@ func TestProcessSignals(t *testing.T) {
 	}
 }
 
+// TestProcessInterrupt ensures the convenience API records interrupt termination accurately.
 func TestProcessInterrupt(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("signals not supported on windows")
@@ -960,6 +1226,7 @@ func TestProcessInterrupt(t *testing.T) {
 	}
 }
 
+// TestProcessTerminate ensures forced termination cannot be reported as a clean exit.
 func TestProcessTerminate(t *testing.T) {
 	proc := helperCommand("sleep", "200").Start()
 	if err := proc.Terminate(); err != nil {
@@ -974,6 +1241,7 @@ func TestProcessTerminate(t *testing.T) {
 	}
 }
 
+// TestGracefulShutdownKills ensures an uncooperative process is killed after its grace period.
 func TestGracefulShutdownKills(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("signals not supported on windows")
@@ -992,6 +1260,7 @@ func TestGracefulShutdownKills(t *testing.T) {
 	}
 }
 
+// TestKillAfter ensures repeated scheduling still terminates a long-running process safely.
 func TestKillAfter(t *testing.T) {
 	proc := helperCommand("sleep", "200").Start()
 	proc.KillAfter(10 * time.Millisecond)
@@ -1005,6 +1274,7 @@ func TestKillAfter(t *testing.T) {
 	}
 }
 
+// TestGracefulShutdownCompletes ensures cooperative signal exit avoids escalation to a kill.
 func TestGracefulShutdownCompletes(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("signals not supported on windows")
@@ -1022,6 +1292,7 @@ func TestGracefulShutdownCompletes(t *testing.T) {
 	}
 }
 
+// TestGracefulShutdownImmediate ensures a zero grace period escalates without waiting.
 func TestGracefulShutdownImmediate(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("signals not supported on windows")
@@ -1039,6 +1310,7 @@ func TestGracefulShutdownImmediate(t *testing.T) {
 	}
 }
 
+// TestProcessSendErrors ensures missing process and pipeline state return errors instead of panicking.
 func TestProcessSendErrors(t *testing.T) {
 	var proc *Process
 	if err := proc.Send(os.Interrupt); err == nil {
@@ -1053,6 +1325,7 @@ func TestProcessSendErrors(t *testing.T) {
 	}
 }
 
+// TestProcessSendSkipsStages ensures incomplete pipeline stages are ignored while reporting that nothing was signaled.
 func TestProcessSendSkipsStages(t *testing.T) {
 	proc := &Process{
 		pipeline: &pipeline{
@@ -1069,6 +1342,7 @@ func TestProcessSendSkipsStages(t *testing.T) {
 	}
 }
 
+// TestProcessSendAfterExit ensures signaling a reaped process returns an actionable error.
 func TestProcessSendAfterExit(t *testing.T) {
 	proc := helperCommand("echo", "ok").Start()
 	_, _ = proc.Wait()
@@ -1077,6 +1351,7 @@ func TestProcessSendAfterExit(t *testing.T) {
 	}
 }
 
+// TestErrExecMethods ensures execution errors preserve wrapping semantics and a useful empty fallback.
 func TestErrExecMethods(t *testing.T) {
 	baseErr := errors.New("boom")
 	execErr := ErrExec{Err: baseErr}
@@ -1095,6 +1370,7 @@ func TestErrExecMethods(t *testing.T) {
 	}
 }
 
+// TestSysProcAttrNoops ensures platform-specific process options remain harmless where unsupported.
 func TestSysProcAttrNoops(t *testing.T) {
 	cmd := Command("echo")
 	cmd.CreationFlags(123).HideWindow(true).Pdeathsig(syscall.SIGTERM)
@@ -1115,6 +1391,7 @@ type orderedWriter struct {
 	buf   []byte
 }
 
+// Write records first-observer ordering while retaining all received bytes.
 func (w *orderedWriter) Write(p []byte) (int, error) {
 	if w.order != nil && len(*w.order) == 0 {
 		*w.order = append(*w.order, w.tag)
@@ -1123,6 +1400,7 @@ func (w *orderedWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// TestPipeStrictExplicit ensures explicitly selected strict mode reports an earlier stage failure.
 func TestPipeStrictExplicit(t *testing.T) {
 	res, err := helperPipe(helperCommand("exit", "2").PipeStrict(), "echo", "ok").Run()
 	if err != nil {
@@ -1133,6 +1411,7 @@ func TestPipeStrictExplicit(t *testing.T) {
 	}
 }
 
+// errorsIsContext accepts either cancellation outcome used by timing-sensitive process tests.
 func errorsIsContext(err error) bool {
 	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
 }

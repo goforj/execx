@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// main keeps this documented example executable so API drift fails during compilation.
 func main() {
 	// Env adds environment variables to the command.
 

@@ -6,6 +6,7 @@ import (
 	"os"
 )
 
+// main keeps this documented example executable so API drift fails during compilation.
 func main() {
 	// Dir sets the working directory.
 

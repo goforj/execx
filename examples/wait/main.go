@@ -5,6 +5,7 @@ import (
 	"github.com/goforj/execx"
 )
 
+// main keeps this documented example executable so API drift fails during compilation.
 func main() {
 	// Wait waits for the command to complete and returns the result and any error.
 

@@ -26,6 +26,7 @@ func (c *Cmd) Pdeathsig(_ syscall.Signal) *Cmd {
 	return c
 }
 
+// ensureSysProcAttr allocates Unix process controls only when a caller opts into them.
 func (c *Cmd) ensureSysProcAttr() {
 	if c.sysProcAttr == nil {
 		c.sysProcAttr = &syscall.SysProcAttr{}

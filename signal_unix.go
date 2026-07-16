@@ -7,6 +7,7 @@ import (
 	"syscall"
 )
 
+// signalFromState exposes signal termination without treating it as an execution error.
 func signalFromState(state *os.ProcessState) os.Signal {
 	if state == nil {
 		return nil

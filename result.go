@@ -7,10 +7,15 @@ import (
 
 // Result captures the outcome of a command execution.
 type Result struct {
-	Stdout   string
-	Stderr   string
+	// Stdout contains output captured from the selected command or pipeline stage.
+	Stdout string
+	// Stderr contains error output captured separately from stdout.
+	Stderr string
+	// ExitCode contains the process exit status, or -1 when no process state exists.
 	ExitCode int
-	Err      error
+	// Err mirrors the execution error returned by Run, Wait, or their variants.
+	Err error
+	// Duration measures elapsed time from pipeline construction through process completion.
 	Duration time.Duration
 
 	signal os.Signal

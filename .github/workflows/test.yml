@@ -1,4 +1,4 @@
-name: Go Test
+name: Quality
 
 on:
   push:
@@ -8,7 +8,12 @@ on:
 
 jobs:
   test:
+    name: Go ${{ matrix.go-version }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version: ["1.24.4", "stable"]
 
     steps:
       - name: Checkout
@@ -17,7 +22,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "stable"
+          go-version: ${{ matrix.go-version }}
 
       - name: Verify module files
         run: |
@@ -28,14 +33,42 @@ jobs:
 
       - name: Run tests
         run: |
-          go test ./... -v
+          go test ./...
           go -C docs test ./...
           go -C examples test ./...
 
-      - name: Run tests with coverage
-        run: go test -coverprofile=coverage.txt .
+      - name: Run static analysis
+        run: |
+          go vet ./...
+          go -C docs vet ./...
+          go -C examples vet ./...
+
+      - name: Compile platform-specific tests
+        run: |
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go test -c -o /tmp/execx-windows.test .
+          GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go test -c -o /tmp/execx-darwin.test .
+          GOOS=plan9 GOARCH=amd64 CGO_ENABLED=0 go test -c -o /tmp/execx-plan9.test .
+          GOOS=js GOARCH=wasm CGO_ENABLED=0 go test -c -o /tmp/execx-js.test .
+
+      - name: Run race detector
+        run: go test -race ./...
+
+      - name: Enforce full statement coverage
+        run: |
+          go test -coverprofile=coverage.txt .
+          coverage="$(go tool cover -func=coverage.txt | awk '/^total:/ { print $3 }')"
+          test "$coverage" = "100.0%"
+
+      - name: Verify generated documentation
+        run: |
+          go -C docs run ./examplegen
+          go -C docs run ./readme
+          git diff --exit-code
 
       - name: Upload results to Codecov
+        if: matrix.go-version == 'stable'
         uses: codecov/codecov-action@v5
+        with:
+          files: coverage.txt
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

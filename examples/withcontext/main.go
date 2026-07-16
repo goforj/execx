@@ -7,8 +7,10 @@ import (
 	"time"
 )
 
+// main keeps this documented example executable so API drift fails during compilation.
 func main() {
-	// WithContext binds the command to a context.
+	// WithContext binds the command to a context. A nil context is normalized to
+	// context.Background when execution begins.
 
 	// Example: with context
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)

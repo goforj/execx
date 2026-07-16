@@ -5,6 +5,7 @@ import (
 	"github.com/goforj/execx"
 )
 
+// main keeps this documented example executable so API drift fails during compilation.
 func main() {
 	// IsExitCode reports whether the exit code matches.
 

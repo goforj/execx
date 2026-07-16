@@ -7,9 +7,9 @@ import (
 	"os"
 	"syscall"
 	"testing"
-	"unsafe"
 )
 
+// TestPTYDarwinOpen ensures the host kernel can provide the master and slave pair used by PTY execution.
 func TestPTYDarwinOpen(t *testing.T) {
 	if err := ptyCheck(); err != nil {
 		t.Fatalf("unexpected pty check error: %v", err)
@@ -22,6 +22,7 @@ func TestPTYDarwinOpen(t *testing.T) {
 	_ = slave.Close()
 }
 
+// TestPTYIoctlSuccessAndError ensures Darwin ioctl results preserve both success and kernel failures.
 func TestPTYIoctlSuccessAndError(t *testing.T) {
 	master, err := os.OpenFile("/dev/ptmx", os.O_RDWR, 0)
 	if err != nil {
@@ -36,6 +37,7 @@ func TestPTYIoctlSuccessAndError(t *testing.T) {
 	}
 }
 
+// TestOpenPTYWithOpenError ensures opening the multiplexer is the first reported PTY failure.
 func TestOpenPTYWithOpenError(t *testing.T) {
 	openFile := func(string, int, os.FileMode) (*os.File, error) {
 		return nil, errors.New("open failed")
@@ -46,6 +48,7 @@ func TestOpenPTYWithOpenError(t *testing.T) {
 	}
 }
 
+// TestOpenPTYWithGrantError ensures permission-grant failures cannot yield a partial PTY pair.
 func TestOpenPTYWithGrantError(t *testing.T) {
 	openFile := func(string, int, os.FileMode) (*os.File, error) {
 		return os.OpenFile(os.DevNull, os.O_RDWR, 0)
@@ -61,6 +64,7 @@ func TestOpenPTYWithGrantError(t *testing.T) {
 	}
 }
 
+// TestOpenPTYWithUnlockError ensures a locked slave cannot escape as a partially initialized pair.
 func TestOpenPTYWithUnlockError(t *testing.T) {
 	openFile := func(string, int, os.FileMode) (*os.File, error) {
 		return os.OpenFile(os.DevNull, os.O_RDWR, 0)
@@ -77,6 +81,7 @@ func TestOpenPTYWithUnlockError(t *testing.T) {
 	}
 }
 
+// TestOpenPTYWithNameError ensures slave-name lookup failures abort PTY initialization.
 func TestOpenPTYWithNameError(t *testing.T) {
 	openFile := func(string, int, os.FileMode) (*os.File, error) {
 		return os.OpenFile(os.DevNull, os.O_RDWR, 0)
@@ -93,6 +98,7 @@ func TestOpenPTYWithNameError(t *testing.T) {
 	}
 }
 
+// TestOpenPTYWithSlaveError ensures slave-open failures are returned after master initialization.
 func TestOpenPTYWithSlaveError(t *testing.T) {
 	openFile := func(name string, flag int, perm os.FileMode) (*os.File, error) {
 		if name == "/dev/ptmx" {
@@ -100,30 +106,19 @@ func TestOpenPTYWithSlaveError(t *testing.T) {
 		}
 		return nil, errors.New("slave open failed")
 	}
-	ioctl := func(fd uintptr, req uintptr, arg uintptr) error {
-		if req == syscall.TIOCPTYGNAME {
-			buf := (*[128]byte)(unsafe.Pointer(arg))
-			copy(buf[:], []byte("/dev/doesnotexist"))
-		}
-		return nil
-	}
+	ioctl := func(uintptr, uintptr, uintptr) error { return nil }
 	_, _, err := openPTYWith(openFile, ioctl)
 	if err == nil || err.Error() != "slave open failed" {
 		t.Fatalf("expected slave open error, got %v", err)
 	}
 }
 
+// TestOpenPTYWithSuccess ensures injected Darwin system calls can complete a usable PTY pair.
 func TestOpenPTYWithSuccess(t *testing.T) {
 	openFile := func(name string, flag int, perm os.FileMode) (*os.File, error) {
 		return os.OpenFile(os.DevNull, os.O_RDWR, 0)
 	}
-	ioctl := func(fd uintptr, req uintptr, arg uintptr) error {
-		if req == syscall.TIOCPTYGNAME {
-			buf := (*[128]byte)(unsafe.Pointer(arg))
-			copy(buf[:], []byte(os.DevNull))
-		}
-		return nil
-	}
+	ioctl := func(uintptr, uintptr, uintptr) error { return nil }
 	master, slave, err := openPTYWith(openFile, ioctl)
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)

@@ -9,14 +9,17 @@ import (
 	"unsafe"
 )
 
+// ptyCheck reports Darwin support before command setup allocates any descriptors.
 func ptyCheck() error {
 	return nil
 }
 
+// openPTY delegates system calls so error paths remain deterministic in tests.
 func openPTY() (*os.File, *os.File, error) {
 	return openPTYWith(os.OpenFile, ptyIoctl)
 }
 
+// openPTYWith grants and unlocks a Darwin PTY before opening its discovered slave device.
 func openPTYWith(openFile func(string, int, os.FileMode) (*os.File, error), ioctl func(uintptr, uintptr, uintptr) error) (*os.File, *os.File, error) {
 	master, err := openFile("/dev/ptmx", os.O_RDWR|syscall.O_NOCTTY, 0)
 	if err != nil {
@@ -44,6 +47,7 @@ func openPTYWith(openFile func(string, int, os.FileMode) (*os.File, error), ioct
 	return master, slave, nil
 }
 
+// ptyIoctl converts the raw syscall errno into an ordinary Go error.
 func ptyIoctl(fd uintptr, req uintptr, arg uintptr) error {
 	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd, req, arg)
 	if errno != 0 {

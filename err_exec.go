@@ -4,10 +4,14 @@ import "os"
 
 // ErrExec reports a failure to start or an explicit execution failure.
 type ErrExec struct {
-	Err      error
+	// Err contains the underlying start or I/O failure.
+	Err error
+	// ExitCode contains the child status when a process reached execution.
 	ExitCode int
-	Signal   os.Signal
-	Stderr   string
+	// Signal contains the terminating signal on platforms that expose one.
+	Signal os.Signal
+	// Stderr contains captured diagnostic output available when the failure occurred.
+	Stderr string
 }
 
 // Error returns the wrapped error message when available.

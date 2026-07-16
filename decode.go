@@ -12,6 +12,7 @@ import (
 
 // Decoder decodes serialized data into a destination value.
 type Decoder interface {
+	// Decode parses data into dst.
 	Decode(data []byte, dst any) error
 }
 
@@ -31,6 +32,7 @@ type decodeConfig struct {
 	trim   bool
 }
 
+// defaultDecodeConfig keeps stdout and unmodified bytes as the least surprising decode path.
 func defaultDecodeConfig() decodeConfig {
 	return decodeConfig{source: decodeStdout}
 }
@@ -235,6 +237,7 @@ func (c *Cmd) DecodeWith(dst any, decoder Decoder) error {
 	return decodeInto(c, dst, decoder, defaultDecodeConfig())
 }
 
+// decodeInto validates reflection-sensitive inputs before starting the subprocess.
 func decodeInto(c *Cmd, dst any, decoder Decoder, cfg decodeConfig) error {
 	if c == nil {
 		return errors.New("command is nil")
@@ -262,6 +265,7 @@ func decodeInto(c *Cmd, dst any, decoder Decoder, cfg decodeConfig) error {
 	return nil
 }
 
+// decodeSource executes exactly once through the output path selected by the chain.
 func (c *Cmd) decodeSource(source decodeSource) ([]byte, error) {
 	switch source {
 	case decodeCombined:
@@ -283,6 +287,7 @@ func (c *Cmd) decodeSource(source decodeSource) ([]byte, error) {
 	}
 }
 
+// decodeSourceName adds stable context to decoder failures without obscuring their cause.
 func decodeSourceName(source decodeSource) string {
 	switch source {
 	case decodeCombined:

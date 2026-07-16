@@ -5,8 +5,10 @@ import (
 	"github.com/goforj/execx"
 )
 
+// main keeps this documented example executable so API drift fails during compilation.
 func main() {
-	// PipelineResults executes the command and returns per-stage results and any error.
+	// PipelineResults executes the command and returns per-stage results and the first
+	// execution error. Non-zero exit codes remain data in their corresponding Result.
 
 	// Example: pipeline results
 	results, _ := execx.Command("printf", "go").

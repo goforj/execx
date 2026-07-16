@@ -2,13 +2,11 @@
 
 package execx
 
-import "syscall"
-
 const (
 	// CreateNewProcessGroup starts the process in a new process group.
-	CreateNewProcessGroup = syscall.CREATE_NEW_PROCESS_GROUP
+	CreateNewProcessGroup = 0x00000200
 	// CreateNewConsole creates a new console for the process.
-	CreateNewConsole = syscall.CREATE_NEW_CONSOLE
+	CreateNewConsole = 0x00000010
 	// CreateNoWindow prevents console windows from being created.
-	CreateNoWindow = syscall.CREATE_NO_WINDOW
+	CreateNoWindow = 0x08000000
 )

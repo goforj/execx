@@ -145,6 +145,7 @@ func modulePath(root string) (string, error) {
 // ------------------------------------------------------------
 //
 
+// FuncDoc captures the metadata needed to render one documented function.
 type FuncDoc struct {
 	Name        string
 	Group       string
@@ -152,6 +153,7 @@ type FuncDoc struct {
 	Examples    []Example
 }
 
+// Example captures an executable snippet and its source location.
 type Example struct {
 	FuncName string
 	File     string
@@ -190,7 +192,7 @@ func extractFuncDocs(
 		}
 
 		name := fn.Name.Name
-		if !ast.IsExported(name) {
+		if !ast.IsExported(name) || !hasExportedReceiver(fn) {
 			continue
 		}
 
@@ -203,6 +205,19 @@ func extractFuncDocs(
 	}
 
 	return out
+}
+
+// hasExportedReceiver excludes methods whose unexported receiver makes them package-internal.
+func hasExportedReceiver(fn *ast.FuncDecl) bool {
+	if fn.Recv == nil {
+		return true
+	}
+	typeExpr := fn.Recv.List[0].Type
+	if pointer, ok := typeExpr.(*ast.StarExpr); ok {
+		typeExpr = pointer.X
+	}
+	identifier, ok := typeExpr.(*ast.Ident)
+	return ok && ast.IsExported(identifier.Name)
 }
 
 // extractGroup keeps the generated index aligned with the source-level grouping annotation.
@@ -473,6 +488,7 @@ func writeMain(base string, fd *FuncDoc, importPath string) error {
 		buf.WriteString(")\n\n")
 	}
 
+	buf.WriteString("// main keeps this documented example executable so API drift fails during compilation.\n")
 	buf.WriteString("func main() {\n")
 
 	if fd.Description != "" {

@@ -50,11 +50,12 @@ func (c *Cmd) HideWindow(on bool) *Cmd {
 	c.ensureSysProcAttr()
 	c.sysProcAttr.HideWindow = on
 	if on {
-		c.sysProcAttr.CreationFlags |= syscall.CREATE_NO_WINDOW
+		c.sysProcAttr.CreationFlags |= CreateNoWindow
 	}
 	return c
 }
 
+// ensureSysProcAttr allocates Windows process controls only when a caller opts into them.
 func (c *Cmd) ensureSysProcAttr() {
 	if c.sysProcAttr == nil {
 		c.sysProcAttr = &syscall.SysProcAttr{}

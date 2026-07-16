@@ -4,6 +4,7 @@ package execx
 
 import "testing"
 
+// TestSysProcAttrUnixFlags ensures Unix process-group and session settings reach os/exec unchanged.
 func TestSysProcAttrUnixFlags(t *testing.T) {
 	cmd := Command("echo")
 	cmd.Setpgid(true).Setsid(true)
