@@ -16,7 +16,6 @@
 <!-- test-count:embed:start -->
     <img src="https://img.shields.io/badge/tests-116-brightgreen" alt="Tests">
 <!-- test-count:embed:end -->
-    <a href="https://goreportcard.com/report/github.com/goforj/execx"><img src="https://goreportcard.com/badge/github.com/goforj/execx" alt="Go Report Card"></a>
 </p>
 
 ## What execx is
