@@ -1160,14 +1160,6 @@ fmt.Println(out == dir)
 
 `docs` and `examples` are separate Go modules, keeping their tooling and generated programs out of the library module download.
 
-Run the tests and rebuild the generated examples and README with:
-
-```sh
-go test ./...
-go -C docs test ./...
-go -C examples test ./...
-go -C docs run ./examplegen
-go -C docs run ./readme
-```
+Use `make test`, `make test-race`, `make vet`, and `make generate`. The test and vet targets cover all three modules; generation rebuilds the examples and README.
 
 Licensed under the [MIT License](./LICENSE).
