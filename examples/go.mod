@@ -1,6 +1,6 @@
 module github.com/goforj/execx/examples
 
-go 1.24.4
+go 1.27.0
 
 require github.com/goforj/execx v1.1.0
 
