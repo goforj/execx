@@ -220,6 +220,25 @@ func (d *DecodeChain) Into(dst any) error {
 	return decodeInto(d.cmd, dst, d.decoder, d.cfg)
 }
 
+// As executes the command and decodes its selected output into T.
+// @group Decoding
+//
+// Example: decode as a value
+//
+//	type payload struct {
+//		Name string `json:"name"`
+//	}
+//	out, err := execx.Command("printf", `{"name":"gopher"}`).
+//		DecodeJSON().
+//		As[payload]()
+//	fmt.Println(err == nil, out.Name)
+//	// true gopher
+func (d *DecodeChain) As[T any]() (T, error) {
+	var out T
+	err := decodeInto(d.cmd, &out, d.decoder, d.cfg)
+	return out, err
+}
+
 // DecodeWith executes the command and decodes stdout into dst.
 // @group Decoding
 //

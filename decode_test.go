@@ -12,6 +12,48 @@ type testPayload struct {
 	Name string `json:"name"`
 }
 
+// TestDecodeAs returns a typed result while preserving the configured decoder and source.
+func TestDecodeAs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("decode as test uses printf")
+	}
+
+	as := (*DecodeChain).As[testPayload]
+	chain := Command("printf", `  {"name":"gopher"}  `).
+		DecodeJSON().
+		FromStdout().
+		Trim()
+	out, err := as(chain)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if out.Name != "gopher" {
+		t.Fatalf("unexpected name: %q", out.Name)
+	}
+
+	bound := Command("printf", `{"name":"value"}`).DecodeJSON().As[testPayload]
+	out, err = bound()
+	if err != nil || out.Name != "value" {
+		t.Fatalf("method value returned %+v, %v", out, err)
+	}
+}
+
+// TestDecodeAsErrors preserves command, decoder, and decode failures in the result form.
+func TestDecodeAsErrors(t *testing.T) {
+	if _, err := (*Cmd)(nil).DecodeJSON().As[testPayload](); err == nil {
+		t.Fatal("expected nil command error")
+	}
+	if _, err := Command("printf", `{}`).Decode(nil).As[testPayload](); err == nil {
+		t.Fatal("expected nil decoder error")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("decode error test uses printf")
+	}
+	if _, err := Command("printf", `not-json`).DecodeJSON().As[testPayload](); err == nil {
+		t.Fatal("expected decode error")
+	}
+}
+
 // TestDecodeYAMLInto ensures YAML command output can populate a caller-owned destination.
 func TestDecodeYAMLInto(t *testing.T) {
 	if runtime.GOOS == "windows" {
