@@ -1178,3 +1178,7 @@ fmt.Println(out == dir)
 Use `make test`, `make test-race`, `make vet`, and `make generate`. The test and vet targets cover all three modules; generation rebuilds the examples and README.
 
 Licensed under the [MIT License](./LICENSE).
+
+## Documentation
+
+Read the [execx library documentation](https://goforj.dev/execx) for standalone installation, usage, and API reference.
