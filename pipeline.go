@@ -135,30 +135,39 @@ func (p *pipeline) abortStart(failed int, cause error) {
 	}
 }
 
-// wait reaps each process and closes every in-memory pipe once its producer or consumer is done.
+// wait reaps stages independently so an exited consumer can unblock its producer.
 func (p *pipeline) wait() {
-	for i := range p.stages {
-		if p.stages[i].startErr != nil {
-			if p.stages[i].pipeWriter != nil {
-				_ = p.stages[i].pipeWriter.Close()
+	var waits sync.WaitGroup
+	for _, stg := range p.stages {
+		waits.Add(1)
+		go func(stg *stage) {
+			defer waits.Done()
+			defer func() {
+				p.outputMu.Lock()
+				defer p.outputMu.Unlock()
+				stg.flush()
+			}()
+			if stg.startErr != nil {
+				if stg.pipeWriter != nil {
+					_ = stg.pipeWriter.Close()
+				}
+				return
 			}
-			p.stages[i].flush()
-			continue
-		}
-		p.stages[i].waitErr = p.stages[i].cmd.Wait()
-		if p.stages[i].pipeWriter != nil {
-			_ = p.stages[i].pipeWriter.Close()
-		}
-		if p.stages[i].ptyDone != nil {
-			if err := <-p.stages[i].ptyDone; err != nil {
-				p.stages[i].outputErr = err
+			stg.waitErr = stg.cmd.Wait()
+			if stg.pipeWriter != nil {
+				_ = stg.pipeWriter.Close()
 			}
-		}
-		if p.stages[i].pipeReader != nil {
-			_ = p.stages[i].pipeReader.Close()
-		}
-		p.stages[i].flush()
+			if stg.ptyDone != nil {
+				if err := <-stg.ptyDone; err != nil {
+					stg.outputErr = err
+				}
+			}
+			if stg.pipeReader != nil {
+				_ = stg.pipeReader.Close()
+			}
+		}(stg)
 	}
+	waits.Wait()
 }
 
 // results snapshots stage outcomes after all output and process state has settled.
