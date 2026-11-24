@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -39,6 +40,8 @@ func TestHelperProcess(t *testing.T) {
 		_, _ = io.WriteString(os.Stderr, strings.Join(cmdArgs, " "))
 	case "cat":
 		_, _ = io.Copy(os.Stdout, os.Stdin)
+	case "first-byte":
+		_, _ = io.CopyN(os.Stdout, os.Stdin, 1)
 	case "exit":
 		code, _ := strconv.Atoi(cmdArgs[0])
 		os.Exit(code)
@@ -485,6 +488,74 @@ func TestPipelineDownstreamStartErrorAbortsUpstream(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("pipeline did not abort after downstream start failure")
+	}
+}
+
+// waitForPipeline bounds regression tests and releases their processes and pipes on failure.
+func waitForPipeline(t *testing.T, proc *Process) (Result, error) {
+	t.Helper()
+	select {
+	case <-proc.done:
+		return proc.Wait()
+	case <-time.After(5 * time.Second):
+		for _, stage := range proc.pipeline.stages {
+			if stage.pipeReader != nil {
+				_ = stage.pipeReader.Close()
+			}
+			if stage.pipeWriter != nil {
+				_ = stage.pipeWriter.Close()
+			}
+		}
+		_ = proc.Terminate()
+		_, _ = proc.Wait()
+		t.Fatal("pipeline did not finish after its consumer stopped")
+		return Result{}, nil
+	}
+}
+
+// TestPipelineConsumerExitUnblocksUpstream covers a consumer that reads only part of a large input.
+func TestPipelineConsumerExitUnblocksUpstream(t *testing.T) {
+	producer := helperCommand("cat").StdinString(strings.Repeat("x", 1<<20))
+	proc := helperPipe(producer, "first-byte").PipeBestEffort().Start()
+	res, _ := waitForPipeline(t, proc)
+	if res.Stdout != "x" || res.ExitCode != 0 {
+		t.Fatalf("expected the successful consumer result, got %+v", res)
+	}
+}
+
+// TestPipelineConsumerCancellationUnblocksUpstream covers a canceled consumer with a blocked producer.
+func TestPipelineConsumerCancellationUnblocksUpstream(t *testing.T) {
+	producer := helperCommand("cat").StdinString(strings.Repeat("x", 1<<20))
+	proc := helperPipe(producer, "sleep", "5000").
+		WithTimeout(100 * time.Millisecond).
+		PipeBestEffort().Start()
+	_, err := waitForPipeline(t, proc)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected the consumer deadline, got %v", err)
+	}
+}
+
+// TestPipelineFinalCallbacksAreSerialized covers callbacks flushed by different stages at exit.
+func TestPipelineFinalCallbacksAreSerialized(t *testing.T) {
+	var active atomic.Int32
+	var overlap atomic.Bool
+	var calls atomic.Int32
+	callback := func(string) {
+		if active.Add(1) != 1 {
+			overlap.Store(true)
+		}
+		calls.Add(1)
+		time.Sleep(10 * time.Millisecond)
+		active.Add(-1)
+	}
+	producer := helperCommand("echo", "tail").OnStdout(callback)
+	proc := helperPipe(producer, "cat").OnStdout(callback).Start()
+	_, err := waitForPipeline(t, proc)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if calls.Load() != 2 || overlap.Load() {
+		t.Fatalf("expected two serialized final callbacks, got calls=%d overlap=%v", calls.Load(), overlap.Load())
 	}
 }
 
